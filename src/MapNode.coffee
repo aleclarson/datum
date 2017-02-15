@@ -1,45 +1,40 @@
 
-emptyFunction = require "emptyFunction"
+# TODO: Finish mapping each value to a specific `ModelNode`.
+
 assertType = require "assertType"
 isType = require "isType"
 OneOf = require "OneOf"
 Event = require "eve"
-isDev = require "isDev"
-steal = require "steal"
 Type = require "Type"
+sync = require "sync"
 
 ArrayNode = require "./ArrayNode"
-
-MapEvent = OneOf "add change delete loading loaded"
+Node = require "./Node"
 
 type = Type "MapNode"
 
+type.inherits Node
+
 type.defineValues ->
 
-  _tree: null
-
-  # The full tree path.
-  _key: null
-
-  # A reference to the nested tree data.
-  _values: {}
-
-  # Does *not* contain nested nodes.
+  # A map of keys to `Node` instances. Does not contain nested nodes.
   _nodes: Object.create null
 
-  # Custom loaders for specific keys.
-  _loaders: Object.create null
-
-  # Resolves keys to absolute paths.
+  # Converts a key (relative to this node) into an absolute path.
   _resolve: @_defaultResolve
 
-  _events: Event.Map()
+  # The history of mutations to this node.
+  _changes: []
 
 type.defineGetters
 
   key: -> @_key
 
   _initialValue: -> {}
+
+type.definePrototype
+
+  _actions: require "./MapActions"
 
 type.defineMethods
 
@@ -52,9 +47,6 @@ type.defineMethods
   set: (key, value) ->
     assertType key, String
 
-    if arguments.length < 2
-      throw Error "Must provide 2 arguments!"
-
     if 1 > dot = key.lastIndexOf "."
       return @_set key, value
 
@@ -65,42 +57,37 @@ type.defineMethods
 
   delete: (key) ->
     assertType key, String
-
-    if 1 > dot = key.lastIndexOf "."
-      return @_delete key
-
-    if node = @_getParent key
-      return node._delete key.slice(dot + 1)
-
-    throw Error "Invalid key has no parent: '#{key}'"
+    @_tree._performAction this,
+      name: "delete"
+      args: [key]
+      revertable: yes
 
   merge: (values) ->
     assertType values, Object
-    for key, value of values
-      @_set key, value
+    @_tree._performAction this,
+      name: "merge"
+      args: [values]
+
+  forEach: (iterator) ->
+    nodes = @_nodes
+    for key, value of @_values
+      iterator nodes[key] or value, key
     return
 
-  forEach: (iterator) -> # TODO: Implement?
+  filter: (iterator) ->
+    nodes = @_nodes
+    values = {}
+    for key, value of @_values
+      value = node if node = nodes[key]
+      values[key] = value if iterator value, key
+    return values
 
-  filter: (iterator) -> # TODO: Implement?
-
-  map: (iterator) -> # TODO: Implement?
-
-  # Possible events:
-  #  - add
-  #  - change
-  #  - delete
-  #  - loading
-  #  - loaded
-
-  on: (event, callback) ->
-    @_events.on event, callback
-
-  once: (event, callback) ->
-    @_events.once event, callback
-
-  load: (key) ->
-    # TODO: Implement field loading.
+  map: (iterator) ->
+    nodes = @_nodes
+    values = {}
+    for key, value of @_values
+      values[key] = iterator nodes[key] or value
+    return values
 
   toString: ->
     JSON.stringify @_values
@@ -108,10 +95,20 @@ type.defineMethods
   fromString: (json) ->
     @merge JSON.parse json
 
-  reset: ->
-    @_onDetach()
-    @_nodes = Object.create null
-    @_values = {}
+  convert: (models) ->
+    assertType models, Object
+
+    @_models ?= Object.create null
+
+    for key, model of models
+
+      if @_models[key] isnt undefined
+        throw Error "Cannot convert the same key twice: '#{key}'"
+
+      if node = @_nodes[key]
+      then node.transform = model
+      else @_models[key] = model
+
     return
 
   _defaultResolve: (key) ->
@@ -125,49 +122,47 @@ type.defineMethods
 
   _set: (key, value) ->
 
+    # if node = @_createModel key, value
+    #   return @_attachModel key, node
+
+    if @_transform isnt null
+      value = @_transform value
+
     oldValue = @_values[key]
     return value if value is oldValue
-
-    event =
-      if oldValue is undefined
-      then "add"
-      else "change"
-
-    if node = @_nodes[key]
-      @_tree._detachNode node
-      unless node._canAttachValue value
-        delete @_nodes[key]
-        node = null
-
-    if node or node = @_createNode value
-      @_attachNode key, node
-      @_values[key] = node._values
-      @_pushChange {event, key, value: node._initialValue}
-      node._attachValues value
-      return node
-
-    @_values[key] = value
-    @_pushChange {event, key, value}
-    return value
-
-  _delete: (key) ->
-
-    delete @_values[key]
 
     if node = @_nodes[key]
       @_tree._detachNode node
       delete @_nodes[key]
 
-    @_pushChange {event: "delete", key}
+    # if node = @_createNode value, key
+    #   @_attachNode key, node
+    #   value = node._initialValue
+    #   node.__attachValues value
+    #   return node
+    #
+    # @_tree._performAction this,
+    #   name: "set"
+    #   args: [key, value]
+    #   revertable: yes
+    #
+    # if node
+    #   @_values[key] = node._values
+    #   return node
+    #
+    # @_values[key] = value
+    # return value
+
+  _delete: (key) ->
+    delete @_values[key]
+    if node = @_nodes[key]
+      @_tree._detachNode node
+      delete @_nodes[key]
     return
 
-  _canAttachValue: (value) -> isType value, Object
-
-  _attachValues: (values) -> @merge values
-
-  _createNode: (value) ->
-    return ArrayNode() if isType value, Array
-    return MapNode() if isType value, Object
+  _createNode: (value, key) ->
+    return ArrayNode value if isType value, Array
+    return MapNode value if isType value, Object
     return null
 
   _attachNode: (key, node) ->
@@ -175,21 +170,57 @@ type.defineMethods
     @_tree._attachNode @_resolve(key), node
     return
 
-  _onDetach: ->
+  # _createModel: (key, value) ->
+  #
+  #   return unless @_models
+  #   return unless createModel = @_models[key]
+  #
+  #   if node = @_nodes[key]
+  #     @_tree._detachNode node
+  #     delete @_nodes[key]
+  #
+  #   return if value is null
+  #
+  #   return createModel value, @_tree
+
+  # _attachModel: (key, node) ->
+  #
+  #   event =
+  #     if @_values[key] is undefined
+  #     then "add"
+  #     else "change"
+  #
+  #   @_attachNode key, node
+  #   @_values[key] = node._values
+  #
+  #   @_pushChange {event, key, options: node._options}
+  #   if action = node._initialAction
+  #     @_performAction action
+  #     node._initialAction = null
+  #   return
+
+  # _getRevertedValue: (change) ->
+    # TODO: Implement finding the value before a specific change.
+
+type.overrideMethods
+
+  __revertAction: (name, args) ->
+
+    if name is "set"
+      throw Error "not implemented"
+      return
+
+    if name is "delete"
+      throw Error "not implemented"
+      return
+
+  __onDetach: ->
     for key, node of @_nodes
       @_tree._detachNode node
     return
 
-  _pushChange: (change) ->
-    if @_key isnt null
-      @_events.emit change.event, change
-      @_events.emit "all", change
-    @_tree._pushChange @_key, change
+  __onReset: ->
+    @_nodes = Object.create null
     return
-
-  _performChange: (key, change) ->
-    if change.event is "delete"
-    then @_delete key
-    else @_set key, change.value
 
 module.exports = MapNode = type.build()

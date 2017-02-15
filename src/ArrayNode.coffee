@@ -1,32 +1,22 @@
 
-emptyFunction = require "emptyFunction"
 assertType = require "assertType"
 isType = require "isType"
 OneOf = require "OneOf"
-Event = require "eve"
 Type = require "Type"
 
-ArrayEvent = OneOf "add change delete"
+Node = require "./Node"
 
 type = Type "ArrayNode"
 
-type.defineValues ->
-
-  _tree: null
-
-  _key: null
-
-  _values: []
-
-  _events: Event.Map()
+type.inherits Node
 
 type.defineGetters
 
-  key: -> @_key
-
   length: -> @_values.length
 
-  _initialValue: -> []
+type.definePrototype
+
+  _actions: require "./ArrayActions"
 
 type.defineMethods
 
@@ -36,43 +26,55 @@ type.defineMethods
 
   set: (index, value) ->
     assertType index, Number
-    if index >= 0 and index < @length
-      @_values[index] = value
-      @_pushChange {event: "change", index, value}
-    return value
+    @_tree._performAction this,
+      name: "set"
+      args: [index, value]
+      revertable: yes
 
   delete: (index) ->
     assertType index, Number
-    if index >= 0 and index < @length
-      [oldValue] = @_values.splice index, 1
-      @_pushChange {event: "delete", index}
-    return
+    @_tree._performAction this,
+      name: "delete"
+      args: [index]
+      revertable: yes
+
+  insert: (index, value) ->
+    assertType index, Number
+    @_tree._performAction this,
+      name: "insert"
+      args: [index, value]
+      revertable: yes
 
   push: (value) ->
-    index = -1 + @_values.push value
-    @_pushChange {event: "add", index, value}
-    return
+    @_tree._performAction this,
+      name: "push"
+      args: [value]
+      revertable: yes
 
   unshift: (value) ->
-    @_values.unshift value
-    @_pushChange {event: "add", index: 0, value}
-    return
+    @_tree._performAction this,
+      name: "unshift"
+      args: [value]
+      revertable: yes
+
+  insertAll: (index, values) ->
+    assertType index, Number
+    assertType values, Array
+    @_tree._performAction this,
+      name: "insertAll"
+      args: [index, values]
 
   pushAll: (values) ->
     assertType values, Array
-    @push value for value in values
-    return
+    @_tree._performAction this,
+      name: "pushAll"
+      args: [values]
 
   unshiftAll: (values) ->
     assertType values, Array
-    @_values = values.concat @_values
-    for value, index in values
-      @_pushChange {event: "add", index, value}
-    return
-
-  insert: (index, value) -> # TODO: Implement?
-
-  insertAll: (index, value) -> # TODO: Implement?
+    @_tree._performAction this,
+      name: "unshiftAll"
+      args: [values]
 
   slice: (index, length) ->
     @_values.slice index, length
@@ -81,37 +83,49 @@ type.defineMethods
 
   sortBy: (key) -> # TODO: Implement?
 
-  forEach: (iterator) -> # TODO: Implement?
-
-  filter: (iterator) -> # TODO: Implement?
-
-  map: (iterator) -> # TODO: Implement?
-
-  on: (event, callback) ->
-    assertType event, ArrayEvent
-    @_events.on event, callback
-
-  once: (event, callback) ->
-    assertType event, ArrayEvent
-    @_events.once event, callback
-
-  reset: ->
-    @_values = []
+  forEach: (iterator) ->
+    for value, index in @_values
+      iterator value, index
     return
 
-  _canAttachValue: (value) -> isType value, Array
+  filter: (iterator) ->
+    values = []
+    for value, index in @_values
+      values.push value if iterator value, index
+    return values
 
-  _attachValues: (values) -> @pushAll values
+  map: (iterator) ->
+    values = new Array @length
+    for value, index in @_values
+      values[index] = iterator value, index
+    return values
 
-  _onDetach: emptyFunction
+type.overrideMethods
 
-  _pushChange: (change) ->
-    @_events.emit change.event, change
-    @_events.emit "all", change
-    @_tree._pushChange @_key, change
-    return
+  __getInitialValue: -> []
 
-  _performChange: (key, change) ->
-    # TODO: Implement
+  __attachValues: (values) -> @pushAll values
+
+  __revertAction: (name, args) ->
+
+    if name is "set"
+      throw Error "not implemented"
+      return
+
+    if name is "delete"
+      throw Error "not implemented"
+      return
+
+    if name is "insert"
+      throw Error "not implemented"
+      return
+
+    if name is "push"
+      throw Error "not implemented"
+      return
+
+    if name is "unshift"
+      throw Error "not implemented"
+      return
 
 module.exports = type.build()

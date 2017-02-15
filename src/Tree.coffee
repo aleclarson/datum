@@ -14,22 +14,33 @@ type = Type "Tree"
 
 type.defineValues ->
 
-  # Contains all data (flat or nested).
+  # The base level. All data lives here.
   _root: MapNode()
 
-  # Quick access to any nested node (eg: "a.b.c").
+  # Fast access to any node in the entire tree (using absolute paths).
   _nodes: Object.create null
 
-  # Contains changes to all nested data.
-  _changes: []
+  # The current action being performed.
+  _currentAction: null
+
+  # Whenever a nested action is performed, its parent action is marked "pending".
+  _pendingActions: []
+
+  # The history of actions performed anywhere in the tree.
+  _finishedActions: []
 
 type.initInstance ->
-  @_root._tree = this
-  @_root._resolve = emptyFunction.thatReturnsArgument
+  root = @_root
+  root._tree = this
+  root._resolve = emptyFunction.thatReturnsArgument
+  return
 
 type.defineGetters
 
-  changes: -> @_changes
+  actions: -> @_finishedActions
+
+  # Used for testing & debugging.
+  _values: -> @_root._values
 
 type.defineMethods
 
@@ -46,9 +57,11 @@ type.defineMethods
     then node._get key.slice node._key.length + 1
     else node._get key
 
+  call: (action) ->
+    @_root.call.apply @_root, arguments
+
   set: (key, value) ->
-    assertType key, String
-    return @_root.set key, value
+    @_root.set key, value
 
   delete: (key) ->
     @_root.delete key
@@ -65,50 +78,6 @@ type.defineMethods
   map: (iterator) ->
     @_root.map iterator
 
-  undo: (key, count) ->
-
-    if arguments.length is 1
-      count = key
-      key = null
-
-    assertType key, String.Maybe
-    assertType count, Number
-
-    if key isnt null
-
-      if node = @_nodes[key]
-        key = null
-
-      else if 0 < dot = key.lastIndexOf "."
-        node = @_getParent
-        key = key.slice dot + 1
-
-    changes = @_changes
-
-    if node?
-      changes = changes.filter (event) ->
-        event.key is node._key
-
-    if key isnt null
-      changes = changes.filter (event) ->
-        event.change.key is key
-
-    index = changes.length
-    lastIndex = Math.max 0, index - count
-
-    # while --index >= lastIndex
-    #   change = changes[index]
-    #   if change.event is "delete"
-    #     # TODO: Look up last change/add event for the specific key.
-    #   else if change.event is "add"
-    #     newChange = {event: "delete"}
-    #     newChange.key = change.key
-    #     Object.assign {}, change, {event: "delete"}
-    #   else
-
-    # TODO: Splice reversed changes out of `this._changes` and `node._changes`.
-    return
-
   on: (event, callback) ->
     @_root.on event, callback
 
@@ -123,6 +92,12 @@ type.defineMethods
 
   fromString: (json) ->
     @_root.fromString json
+
+  convert: (modelTypes) ->
+    @_root.convert modelTypes
+
+  transform: (transformer) ->
+    @_root.transform transformer
 
   _get: (key) ->
     @_root._values[key]
@@ -151,22 +126,56 @@ type.defineMethods
     node._key = null
     return
 
-  _pushChange: (key, change) ->
-    assertType key, String.Maybe
-    assertType change, Object
-    event = if key then {key, change} else {change}
-    @_changes.push event
-    @_root._events.emit change.event, event
-    @_root._events.emit "all", event
-    return
+  _performAction: (node, action) ->
+    assertType action, Object
 
-  _performChange: (key, change) ->
+    parents = @_pendingActions
+    parents.push parent if parent = @_currentAction
+    @_currentAction = action
 
-    if node = @_getParent key
-      key = key.slice node._key.length + 1
-      node._performChange key, change
+    action.target = node._key
+    result = node._performAction action, changes = []
+    action.changes = changes if changes.length
+
+    if parent
+    then parent.changes.push action
+    else @_finishedActions.push action
+
+    @_currentAction = parents.pop() or null
+    return result
+
+  _revertAction: (action) ->
+    assertType action, Object
+
+    unless action.revertable
+      if changes = action.changes
+        @_revertChange change for change in changes
       return
 
-    throw Error "Invalid key has no parent: '#{key}'"
+    node =
+      if action.target
+      then @_nodes[action.target]
+      else @_root
+
+    if node is undefined
+      throw Error "Missing node for key: '#{action.target}'"
+
+    node.__revertAction action.name, action.args
+    return
+
+  _replayAction: (action) ->
+    assertType action, Object
+
+    node =
+      if action.target
+      then @_nodes[action.target]
+      else @_root
+
+    if node is undefined
+      throw Error "Missing node for key: '#{action.target}'"
+
+    delete action.changes
+    @_performAction node, action
+    return
 
 module.exports = type.build()

@@ -1,7 +1,8 @@
 
-Tree = require ".."
+Tree = require "../js/Tree"
 MapNode = require "../js/MapNode"
 ArrayNode = require "../js/ArrayNode"
+ModelNode = require "../js/ModelNode"
 
 describe "Tree", ->
 
@@ -298,3 +299,46 @@ describe "ArrayNode", ->
   xdescribe "array.on('delete')", ->
 
     it "emits when an item is removed from the array", ->
+
+xdescribe "ModelNode", ->
+
+xdescribe "ModelNode.Type", ->
+
+  it "creates a model builder", ->
+    Type = require "Type"
+    type = ModelNode.Type()
+    expect type instanceof Type.Builder
+      .toBe yes
+
+  describe "type.defineModel()", ->
+
+    it "sets which keys should persist beyond reloads", ->
+
+      model = do ->
+        type = ModelNode.Type()
+        type.defineModel {a: Number}
+        return type.construct()
+
+      # The model throws if not attached to a tree.
+      tree = Tree()
+      tree._attachModel "foo", model
+
+      # Persisted keys are validated when set.
+      expect -> model.a = yes
+        .not.toThrow()
+
+      # This value is persisted.
+      model.a = 1
+
+      # This value is not.
+      model.c = 1
+
+      expect model._values
+        .toEqual {a: 1}
+
+      expect tree._values
+        .toEqual {foo: {a: 1}}
+
+  xdescribe "type.defineValues()", ->
+
+  xdescribe "type.defineLoaders()", ->
