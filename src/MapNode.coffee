@@ -9,40 +9,39 @@ Type = require "Type"
 sync = require "sync"
 
 ArrayNode = require "./ArrayNode"
+NodeTree = require "./NodeTree"
 Node = require "./Node"
 
 type = Type "MapNode"
 
 type.inherits Node
 
+type.createInstance (values) ->
+  assertType values, Object.Maybe
+  return Node values or {}
+
 type.defineValues ->
 
   # A map of keys to `Node` instances. Does not contain nested nodes.
   _nodes: Object.create null
 
-  # Converts a key (relative to this node) into an absolute path.
-  _resolve: @_defaultResolve
-
-  # The history of mutations to this node.
-  _changes: []
-
 type.defineGetters
 
   key: -> @_key
 
-  _initialValue: -> {}
+  _initialValue: -> Object.assign {}, @_values
 
 type.definePrototype
 
-  _actions: require "./MapActions"
+  _revertable: ["set", "delete"]
 
 type.defineMethods
 
   get: (key) ->
     assertType key, String
     if 1 > key.lastIndexOf "."
-    then @_nodes[key] or @_values[key]
-    else @_tree.get @_key + "." + key
+    then @_get key
+    else @_tree.get @_resolve key
 
   set: (key, value) ->
     assertType key, String
@@ -57,16 +56,21 @@ type.defineMethods
 
   delete: (key) ->
     assertType key, String
-    @_tree._performAction this,
-      name: "delete"
-      args: [key]
-      revertable: yes
+
+    if 1 > dot = key.lastIndexOf "."
+      return @_delete key
+
+    if node = @_getParent key
+      return node._delete key.slice(dot + 1)
+
+    throw Error "Invalid key has no parent: '#{key}'"
 
   merge: (values) ->
     assertType values, Object
-    @_tree._performAction this,
-      name: "merge"
-      args: [values]
+    action = @_startAction "merge", [values]
+    @_set key, value for key, value of values
+    @_finishAction action
+    return
 
   forEach: (iterator) ->
     nodes = @_nodes
@@ -111,96 +115,62 @@ type.defineMethods
 
     return
 
-  _defaultResolve: (key) ->
-    return @_key + "." + key
-
-  _getParent: (key) ->
-    @_tree._getParent @_resolve key
+  _resolve: (key) ->
+    if @_key
+    then @_key + "." + key
+    else key
 
   _get: (key) ->
-    return @_nodes[key] or @_values[key]
+    @_nodes[key] or @_values[key]
+
+  _getParent: (key) ->
+    @_tree.getParent @_resolve key
 
   _set: (key, value) ->
-
-    # if node = @_createModel key, value
-    #   return @_attachModel key, node
-
-    if @_transform isnt null
-      value = @_transform value
 
     oldValue = @_values[key]
     return value if value is oldValue
 
+    action = @_startAction "set", [key, value]
+
     if node = @_nodes[key]
       @_tree._detachNode node
       delete @_nodes[key]
 
-    # if node = @_createNode value, key
-    #   @_attachNode key, node
-    #   value = node._initialValue
-    #   node.__attachValues value
-    #   return node
-    #
-    # @_tree._performAction this,
-    #   name: "set"
-    #   args: [key, value]
-    #   revertable: yes
-    #
-    # if node
-    #   @_values[key] = node._values
-    #   return node
-    #
-    # @_values[key] = value
-    # return value
+    @_tree ?= NodeTree this
+
+    if value instanceof Node
+      node = value
+
+    else if isType value, Object
+      node = MapNode value
+
+    else if isType value, Array
+      node = ArrayNode value
+
+    if node isnt undefined
+      @_nodes[key] = node
+      @_tree.attach @_resolve(key), node
+      value = node._initialValue
+
+    @_values[key] =
+      if node
+      then node._values
+      else value
+
+    @_finishAction action
+    return node or value
 
   _delete: (key) ->
-    delete @_values[key]
+    action = @_startAction "delete", [key]
+
     if node = @_nodes[key]
-      @_tree._detachNode node
+      @_tree.detach node
       delete @_nodes[key]
+
+    delete @_values[key]
+    @_finishAction action
     return
-
-  _createNode: (value, key) ->
-    return ArrayNode value if isType value, Array
-    return MapNode value if isType value, Object
-    return null
-
-  _attachNode: (key, node) ->
-    @_nodes[key] = node
-    @_tree._attachNode @_resolve(key), node
-    return
-
-  # _createModel: (key, value) ->
-  #
-  #   return unless @_models
-  #   return unless createModel = @_models[key]
-  #
-  #   if node = @_nodes[key]
-  #     @_tree._detachNode node
-  #     delete @_nodes[key]
-  #
-  #   return if value is null
-  #
-  #   return createModel value, @_tree
-
-  # _attachModel: (key, node) ->
-  #
-  #   event =
-  #     if @_values[key] is undefined
-  #     then "add"
-  #     else "change"
-  #
-  #   @_attachNode key, node
-  #   @_values[key] = node._values
-  #
-  #   @_pushChange {event, key, options: node._options}
-  #   if action = node._initialAction
-  #     @_performAction action
-  #     node._initialAction = null
-  #   return
-
-  # _getRevertedValue: (change) ->
-    # TODO: Implement finding the value before a specific change.
 
 type.overrideMethods
 
@@ -214,13 +184,19 @@ type.overrideMethods
       throw Error "not implemented"
       return
 
+  __replayAction: (name, args) ->
+
+    if name is "set"
+      throw Error "not implemented"
+      return
+
+    if name is "delete"
+      throw Error "not implemented"
+      return
+
   __onDetach: ->
     for key, node of @_nodes
       @_tree._detachNode node
-    return
-
-  __onReset: ->
-    @_nodes = Object.create null
     return
 
 module.exports = MapNode = type.build()

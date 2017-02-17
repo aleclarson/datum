@@ -1,108 +1,94 @@
 
-Tree = require "../js/Tree"
 MapNode = require "../js/MapNode"
 ArrayNode = require "../js/ArrayNode"
 ModelNode = require "../js/ModelNode"
 
-describe "Tree", ->
+fdescribe "MapNode", ->
 
-  it "is backed by a MapNode", ->
-    tree = Tree()
-    expect tree._root instanceof MapNode
-      .toBe yes
-
-  describe "tree.set()", ->
+  describe "map.set()", ->
 
     it "can set a new key", ->
 
-      tree = Tree()
-      tree.set "foo", 1
+      map = MapNode()
+      map.set "foo", 1
 
-      expect tree._get "foo"
+      expect map._values.foo
         .toBe 1
 
     it "supports objects as values", ->
 
-      tree = Tree()
-      tree.set "foo", input = {a: 1}
-      output = tree._get "foo"
+      map = MapNode()
+      map.set "foo", input = {a: 1}
 
-      expect output
-        .toEqual input
-
-      expect output
-        .not.toBe input
+      expect map._values.foo
+        .toBe input
 
     it "supports arrays as values", ->
 
-      tree = Tree()
-      tree.set "foo", input = [1]
-      output = tree._get "foo"
+      map = MapNode()
+      map.set "foo", input = [1]
 
-      expect output
-        .toEqual input
+      expect map._values.foo
+        .toBe input
 
-      expect output
-        .not.toBe input
-
-  describe "tree.get()", ->
+  describe "map.get()", ->
 
     it "returns the value for primitives", ->
 
-      tree = Tree()
-      tree.set "foo", 1
+      map = MapNode()
+      map.set "foo", 1
 
-      expect tree.get "foo"
+      expect map.get "foo"
         .toBe 1
 
     it "returns a `MapNode` for objects", ->
 
-      tree = Tree()
-      tree.set "foo", {}
-      node = tree.get "foo"
+      map = MapNode()
+      map.set "foo", {}
+      node = map.get "foo"
 
       expect node instanceof MapNode
         .toBe yes
 
     it "returns an `ArrayNode` for arrays", ->
 
-      tree = Tree()
-      tree.set "foo", []
-      node = tree.get "foo"
+      map = MapNode()
+      map.set "foo", []
+      node = map.get "foo"
 
       expect node instanceof ArrayNode
         .toBe yes
 
     it "supports keys with dot-notation", ->
 
-      tree = Tree()
-      tree.set "foo", {bar: 1}
-      value = tree.get "foo.bar"
+      map = MapNode()
+      map.set "foo", {bar: 1}
+      value = map.get "foo.bar"
 
       expect value
         .toBe 1
 
-  describe "tree.delete()", ->
+  describe "map.delete()", ->
 
     it "can remove a primitive value", ->
 
-      tree = Tree()
-      tree.set "foo", 1
-      tree.delete "foo"
+      map = MapNode()
+      map.set "foo", 1
+      map.delete "foo"
 
-      expect tree.get "foo"
+      expect map.get "foo"
         .toBe undefined
 
     it "can remove a nested value", ->
 
-      tree = Tree()
-      tree.set "foo", {bar: 1}
-      tree.delete "foo.bar"
+      map = MapNode()
+      map.set "foo", {bar: 1}
+      map.delete "foo.bar"
 
-      expect tree.get "foo.bar"
+      expect map.get "foo.bar"
         .toBe undefined
 
-      unless node = tree.get "foo"
+      unless node = map.get "foo"
         return fail "Expected 'foo' to exist."
 
       expect node._values
@@ -110,78 +96,67 @@ describe "Tree", ->
 
     it "can remove a MapNode", ->
 
-      tree = Tree()
-      tree.set "foo", {bar: 1}
-      tree.delete "foo"
+      map = MapNode()
+      map.set "foo", {bar: 1}
+      map.delete "foo"
 
-      expect tree.get "foo"
+      expect map.get "foo"
         .toBe undefined
 
-      expect tree._nodes["foo"]
+      expect map._nodes["foo"]
         .toBe undefined
 
     it "can remove an ArrayNode", ->
 
-      tree = Tree()
-      tree.set "foo", [1]
-      tree.delete "foo"
+      map = MapNode()
+      map.set "foo", [1]
+      map.delete "foo"
 
-      expect tree.get "foo"
+      expect map.get "foo"
         .toBe undefined
 
-      expect tree._nodes["foo"]
+      expect map._nodes["foo"]
         .toBe undefined
 
-  xdescribe "tree.merge()", ->
+  xdescribe "map.merge()", ->
 
-  xdescribe "tree.forEach()", ->
+  xdescribe "map.forEach()", ->
 
-  xdescribe "tree.filter()", ->
+  xdescribe "map.filter()", ->
 
-  xdescribe "tree.map()", ->
+  xdescribe "map.map()", ->
 
-  describe "tree.changes", ->
+  xdescribe "map.changes", ->
 
-    it "tracks `tree.set`", ->
+    xit "tracks `map.set`", ->
 
-      tree = Tree()
-      tree.set "a", 1
-      tree.set "a", 2
+      map = MapNode()
+      map.set "a", 1
+      map.set "a", 2
 
-      expect tree.changes[0]
+      expect map.changes[0]
         .toEqual {change: {key: "a", event: "add", value: 1}}
 
-      expect tree.changes[1]
+      expect map.changes[1]
         .toEqual {change: {key: "a", event: "change", value: 2}}
 
-    it "tracks `tree.delete`", ->
+    xit "tracks `map.delete`", ->
 
-      tree = Tree()
-      tree.set "a", 1
-      tree.delete "a"
+      map = MapNode()
+      map.set "a", 1
+      map.delete "a"
 
-      expect tree.changes[1]
+      expect map.changes[1]
         .toEqual {change: {key: "a", event: "delete"}}
 
-  describe "tree.on('add')", ->
+  xdescribe "map.on('change')", ->
 
-    it "emits when a value is added to the tree", ->
+    it "emits when a value is added or changed", ->
 
-      tree = Tree()
-      tree.on "add", spy = jasmine.createSpy()
-      tree.set "a", 1
-
-      expect spy.calls.argsFor 0
-        .toEqual [change: {event: "add", key: "a", value: 1}]
-
-  describe "tree.on('change')", ->
-
-    it "emits when a value is replaced in the tree", ->
-
-      tree = Tree()
-      tree.on "change", spy = jasmine.createSpy()
-      tree.set "a", 1
-      tree.set "a", 2
+      map = MapNode()
+      map.on "change", spy = jasmine.createSpy()
+      map.set "a", 1
+      map.set "a", 2
 
       expect spy.calls.count()
         .toBe 1
@@ -189,14 +164,14 @@ describe "Tree", ->
       expect spy.calls.argsFor 0
         .toEqual [change: {event: "change", key: "a", value: 2}]
 
-  describe "tree.on('delete')", ->
+  xdescribe "map.on('delete')", ->
 
-    it "emits when a value is removed from the tree", ->
+    it "emits when a value is removed", ->
 
-      tree = Tree()
-      tree.on "delete", spy = jasmine.createSpy()
-      tree.set "a", 1
-      tree.delete "a"
+      map = MapNode()
+      map.on "delete", spy = jasmine.createSpy()
+      map.set "a", 1
+      map.delete "a"
 
       expect spy.calls.count()
         .toBe 1
@@ -204,26 +179,22 @@ describe "Tree", ->
       expect spy.calls.argsFor 0
         .toEqual [change: {event: "delete", key: "a"}]
 
-  xdescribe "tree.on('all')", ->
-
-    it "is called for any change to the entire tree", ->
-
 describe "ArrayNode", ->
 
-  it "is created when an array is passed to `Tree::set`", ->
+  it "is created when an array is passed to `MapNode::set`", ->
 
-    tree = Tree()
-    tree.set "a", []
-    node = tree.get "a"
+    map = MapNode()
+    map.set "a", []
+    node = map.get "a"
 
     expect node instanceof ArrayNode
       .toBe yes
 
   it "is created when an array is passed to `MapNode::set`", ->
 
-    tree = Tree()
-    tree.set "a", b: []
-    node = tree.get "a.b"
+    map = MapNode()
+    map.set "a", b: []
+    node = map.get "a.b"
 
     expect node instanceof ArrayNode
       .toBe yes
@@ -232,8 +203,8 @@ describe "ArrayNode", ->
 
     it "adds an item to the end of the array", ->
 
-      tree = Tree()
-      node = tree.set "a", []
+      map = MapNode()
+      node = map.set "a", []
       node.push 1
       node.push 2
 
@@ -244,8 +215,8 @@ describe "ArrayNode", ->
 
     it "adds an array of items to the end of the array", ->
 
-      tree = Tree()
-      node = tree.set "a", []
+      map = MapNode()
+      node = map.set "a", []
       node.pushAll [1, 2]
       node.pushAll [3, 4]
 
@@ -256,8 +227,8 @@ describe "ArrayNode", ->
 
     it "adds an item to the start of the array", ->
 
-      tree = Tree()
-      node = tree.set "a", []
+      map = MapNode()
+      node = map.set "a", []
       node.unshift 1
       node.unshift 2
 
@@ -268,8 +239,8 @@ describe "ArrayNode", ->
 
     it "adds an array of items to the start of the array", ->
 
-      tree = Tree()
-      node = tree.set "a", []
+      map = MapNode()
+      node = map.set "a", []
       node.unshiftAll [1, 2]
       node.unshiftAll [3, 4]
 
@@ -300,7 +271,38 @@ describe "ArrayNode", ->
 
     it "emits when an item is removed from the array", ->
 
-xdescribe "ModelNode", ->
+fdescribe "ModelNode", ->
+
+  User = null
+  beforeAll ->
+    User = do ->
+      type = ModelNode.Type "User"
+      type.defineModel {id: String, name: String}
+      type.defineValues (options) -> options
+      return type.build()
+
+  it "is constructed by the user", ->
+    map = MapNode()
+    map.set "user", user = User {id: "0", name: "Alec"}
+    expect map.get "user"
+      .toBe user
+    debugger
+
+  it "validates its options", ->
+    user = User {id: "0", name: "Alec"}
+    expect -> user.id = 1
+      .toThrowError "'id' must be a String!"
+
+  describe "model.toString()", ->
+
+    it "can stringify a new model", ->
+      user = User {id: "0", name: "Alec"}
+      expect user.toString()
+        .toBe JSON.stringify {id: "0", name: "Alec"}
+
+    it "can stringify nested models", ->
+      user = User {id: "0", name: "Alec"}
+
 
 xdescribe "ModelNode.Type", ->
 
@@ -320,7 +322,7 @@ xdescribe "ModelNode.Type", ->
         return type.construct()
 
       # The model throws if not attached to a tree.
-      tree = Tree()
+      tree = MapNode()
       tree._attachModel "foo", model
 
       # Persisted keys are validated when set.

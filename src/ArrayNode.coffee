@@ -10,13 +10,19 @@ type = Type "ArrayNode"
 
 type.inherits Node
 
+type.defineArgs [Array]
+
 type.defineGetters
+
+  key: -> @_key
 
   length: -> @_values.length
 
+  _initialValue: -> @_values.slice()
+
 type.definePrototype
 
-  _actions: require "./ArrayActions"
+  _revertable: ["set", "insert", "push", "unshift", "delete"]
 
 type.defineMethods
 
@@ -26,62 +32,67 @@ type.defineMethods
 
   set: (index, value) ->
     assertType index, Number
-    @_tree._performAction this,
-      name: "set"
-      args: [index, value]
-      revertable: yes
+    action = @_startAction "set", [index, value]
+    @_values[index] = value
+    @_finishAction action
+    return value
 
   delete: (index) ->
     assertType index, Number
-    @_tree._performAction this,
-      name: "delete"
-      args: [index]
-      revertable: yes
+    action = @_startAction "delete", [index]
+    @_values.splice index, 1
+    @_finishAction action
+    return
 
   insert: (index, value) ->
     assertType index, Number
-    @_tree._performAction this,
-      name: "insert"
-      args: [index, value]
-      revertable: yes
+    action = @_startAction "insert", [index, value]
+    @_values.splice index, 0, value
+    @_finishAction action
+    return
 
   push: (value) ->
-    @_tree._performAction this,
-      name: "push"
-      args: [value]
-      revertable: yes
+    action = @_startAction "push", [value]
+    @_values.push value
+    @_finishAction action
+    return
 
   unshift: (value) ->
-    @_tree._performAction this,
-      name: "unshift"
-      args: [value]
-      revertable: yes
+    action = @_startAction "unshift", [value]
+    @_values.unshift value
+    @_finishAction action
+    return
 
   insertAll: (index, values) ->
     assertType index, Number
     assertType values, Array
-    @_tree._performAction this,
-      name: "insertAll"
-      args: [index, values]
+    action = @_startAction "insertAll", [index, values]
+    for value, offset in values
+      @insert index + offset, value
+    @_finishAction action
+    return
 
   pushAll: (values) ->
     assertType values, Array
-    @_tree._performAction this,
-      name: "pushAll"
-      args: [values]
+    action = @_startAction "pushAll", [values]
+    @push value for value in values
+    @_finishAction action
+    return
 
   unshiftAll: (values) ->
     assertType values, Array
-    @_tree._performAction this,
-      name: "unshiftAll"
-      args: [values]
+    action = @_startAction "unshiftAll", [values]
+    index = values.length
+    @unshift values[index] while --index > 0
+    @_finishAction action
+    return
 
   slice: (index, length) ->
     @_values.slice index, length
 
-  sort: -> # TODO: Implement?
+  # sort: -> # TODO: Implement?
 
-  sortBy: (key) -> # TODO: Implement?
+  # sortBy: (key) -> # TODO: Implement?
 
   forEach: (iterator) ->
     for value, index in @_values
@@ -101,10 +112,6 @@ type.defineMethods
     return values
 
 type.overrideMethods
-
-  __getInitialValue: -> []
-
-  __attachValues: (values) -> @pushAll values
 
   __revertAction: (name, args) ->
 

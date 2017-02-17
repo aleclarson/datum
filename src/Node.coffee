@@ -2,9 +2,13 @@
 emptyFunction = require "emptyFunction"
 assertType = require "assertType"
 sliceArray = require "sliceArray"
+LazyVar = require "LazyVar"
+inArray = require "in-array"
 OneOf = require "OneOf"
 Event = require "eve"
 Type = require "Type"
+
+NodeTree = LazyVar -> require "./NodeTree"
 
 type = Type "Node"
 
@@ -27,30 +31,15 @@ type.defineValues (values) ->
   # The history of mutations to this node.
   _changes: []
 
-type.defineGetters
-
-  key: -> @_key
-
-  _initialValue: -> @__getInitialValue()
-
 type.definePrototype
 
-  # The registry of available actions.
+  # The default registry of performable actions. Never mutate this!
   _actions: Object.create null
 
+  # The default list of revertable actions. Never mutate this!
+  _revertable: []
+
 type.defineMethods
-
-  call: (name) ->
-
-    unless @_actions[name]
-      throw Error "Invalid action: '#{name}'"
-
-    action = {name}
-
-    if arguments.length > 1
-      action.args = sliceArray arguments, 1
-
-    return @_performAction action
 
   on: (event, callback) ->
     @_events.on event, callback
@@ -58,19 +47,25 @@ type.defineMethods
   once: (event, callback) ->
     @_events.once event, callback
 
-  _performAction: (action, changes) ->
-    assertType action, Object
-    assertType changes, Array
+  _startAction: (name, args) ->
+    assertType name, String
+    assertType args, Array.Maybe
 
-    # Perform the action.
-    result = @_actions[action.name].apply this, action.args
+    action = {target: @_key, name}
+    action.args = args if args
+
+    @_tree ?= NodeTree.call this
+    return @_tree.startAction action
+
+  _finishAction: (action) ->
 
     # Only revertable actions are tracked per-node.
-    if action.revertable
+    if inArray @_revertable, action.name
       @_changes.push action
-      @_events.emit action.name, action
 
-    return result
+    @_events.emit action.name, action
+    @_tree.finishAction action
+    return
 
   # _findPreviousValue: (key, event) ->
   #   index = @_changes.indexOf event
@@ -81,11 +76,11 @@ type.defineMethods
 
 type.defineHooks
 
-  __getInitialValue: -> {}
+  __revertAction: ->
+    throw Error "Failed to revert action!"
 
-  __attachValues: emptyFunction
-
-  __revertAction: emptyFunction
+  __replayAction: ->
+    throw Error "Failed to replay action!"
 
   __onDetach: emptyFunction
 
