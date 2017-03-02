@@ -1,0 +1,16 @@
+{
+  "name": "datum",
+  "version": "1.0.1",
+  "main": "js/index",
+  "dependencies": {
+    "OneOf": "aleclarson/OneOf#1.0.1",
+    "Type": "aleclarson/Type#2.3.1",
+    "assertType": "aleclarson/assertType#2.0.1",
+    "emptyFunction": "aleclarson/emptyFunction#1.0.0",
+    "eve": "aleclarson/eve#1.0.3",
+    "isDev": "aleclarson/isDev#2.0.0",
+    "isType": "aleclarson/isType#1.0.1",
+    "steal": "aleclarson/steal#1.2.0",
+    "sync": "aleclarson/sync#1.0.2"
+  }
+}
