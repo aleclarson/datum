@@ -96,9 +96,6 @@ type.defineMethods
   toString: ->
     JSON.stringify @_values
 
-  fromString: (json) ->
-    @merge JSON.parse json
-
   convert: (models) ->
     assertType models, Object
 
