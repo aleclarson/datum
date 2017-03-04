@@ -2,6 +2,7 @@
 assertType = require "assertType"
 inArray = require "in-array"
 isType = require "isType"
+Event = require "eve"
 Type = require "Type"
 
 ArrayNode = require "./ArrayNode"
@@ -27,6 +28,9 @@ type.defineValues (root) ->
 
   # The stack of actions where a nested action took over as `current`.
   _parentActions: []
+
+  # Emits when any action in the tree is finished.
+  _didFinishAction: Event()
 
 type.defineGetters
 
@@ -56,6 +60,20 @@ type.defineMethods
     if 0 < dot = key.lastIndexOf "."
     then @_nodes[key.slice 0, dot] or null
     else @_root
+
+  observe: (node, callback) ->
+    @_didFinishAction.on (action) ->
+
+      # Observing the root node captures all actions.
+      if node.key is null
+        callback action
+        return
+
+      # Otherwise, only actions within the node are captured.
+      return if action.target is null
+      if action.target.startsWith node.key
+        callback action
+        return
 
   attach: (key, node) ->
     assertType key, String
@@ -100,6 +118,8 @@ type.defineMethods
     if @_currentAction = @_parentActions.pop() or null
     then @_currentAction.changes.push action
     else @_actions.push action
+
+    @_didFinishAction.emit action
     return action
 
   revertAction: (action) ->

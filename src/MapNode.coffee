@@ -43,6 +43,20 @@ type.defineMethods
     then @_get key
     else @_tree.get @_resolve key
 
+  observe: (key, callback) ->
+
+    if arguments.length is 1
+      assertType callback = key, Function
+      return @_tree.observe this, callback
+
+    assertType key, String
+    assertType callback, Function
+    @_getParent key
+    .on "set", (event) ->
+      if key is event.args[0]
+        callback event.args[1]
+      return
+
   set: (key, value) ->
     assertType key, String
 
