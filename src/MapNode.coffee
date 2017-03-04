@@ -145,7 +145,7 @@ type.defineMethods
     action = @_startAction "set", [key, value]
 
     if node = @_nodes[key]
-      @_tree._detachNode node
+      @_tree.detach node
       delete @_nodes[key]
 
     @_tree ?= NodeTree this
@@ -207,7 +207,7 @@ type.overrideMethods
 
   __onDetach: ->
     for key, node of @_nodes
-      @_tree._detachNode node
+      @_tree.detach node
     return
 
 module.exports = MapNode = type.build()
