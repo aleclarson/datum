@@ -162,7 +162,7 @@ type.defineMethods
     if node isnt undefined
       @_nodes[key] = node
       @_tree.attach @_resolve(key), node
-      value = node._initialValue
+      action.args[1] = node._initialValue
 
     @_values[key] =
       if node
