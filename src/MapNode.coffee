@@ -2,6 +2,7 @@
 # TODO: Finish mapping each value to a specific `ModelNode`.
 
 assertType = require "assertType"
+LazyVar = require "LazyVar"
 isType = require "isType"
 OneOf = require "OneOf"
 Event = require "eve"
@@ -9,21 +10,27 @@ Type = require "Type"
 sync = require "sync"
 
 ArrayNode = require "./ArrayNode"
-NodeTree = require "./NodeTree"
+NodeTree = LazyVar -> require "./NodeTree"
 Node = require "./Node"
 
 type = Type "MapNode"
 
 type.inherits Node
 
-type.createInstance (values) ->
-  assertType values, Object.Maybe
-  return Node values or {}
+type.createInstance ->
+  return Node {}
+
+type.defineArgs [Object.Maybe]
 
 type.defineValues ->
 
   # A map of keys to `Node` instances. Does not contain nested nodes.
   _nodes: Object.create null
+
+type.initInstance (values, tree) ->
+  @_tree = tree or NodeTree.call this
+  @_initialize values if values
+  return
 
 type.defineGetters
 
@@ -145,8 +152,6 @@ type.defineMethods
     if node = @_nodes[key]
       @_tree.detach node
       delete @_nodes[key]
-
-    @_tree ?= NodeTree this
 
     if node = @_createNode value
       @_nodes[key] = node
