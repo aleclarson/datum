@@ -14,7 +14,7 @@ lastActionId = 0
 
 type = Type "NodeTree"
 
-type.defineArgs [MapNode.Maybe]
+type.defineArgs [MapNode.or String.Maybe]
 
 type.defineValues ->
 
@@ -38,17 +38,23 @@ type.defineValues ->
   # The action being performed now.
   _currentAction: null
 
-  # The stack of actions where a nested action took over as `current`.
+  # The stack of actions where a nested action took over as `currentAction`.
   _parentActions: []
 
   # Emits when any action in the tree is finished.
   _didFinishAction: Event()
 
 type.initInstance (root) ->
+
   @_root =
     if isType root, MapNode
     then root
     else MapNode null, this
+
+  if isType root, String
+    root = JSON.parse root
+    @_root._initialize root.values
+    Object.assign @_modelNodes, root.models
   return
 
 type.defineGetters
