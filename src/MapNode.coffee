@@ -121,6 +121,12 @@ type.defineMethods
   _getParent: (key) ->
     @_tree.getParent @_resolve key
 
+  _createNode: (value) ->
+    return MapNode value, @_tree if isType value, Object
+    return ArrayNode value if isType value, Array
+    return value if value instanceof Node
+    return null
+
   _set: (key, value) ->
 
     oldValue = @_values[key]
@@ -134,16 +140,7 @@ type.defineMethods
 
     @_tree ?= NodeTree this
 
-    if value instanceof Node
-      node = value
-
-    else if isType value, Object
-      node = MapNode value
-
-    else if isType value, Array
-      node = ArrayNode value
-
-    if node isnt undefined
+    if node = @_createNode value
       @_nodes[key] = node
       @_tree.attach @_resolve(key), node
       action.args[1] = node._initialValue
