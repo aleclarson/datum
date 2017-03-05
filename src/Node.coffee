@@ -65,8 +65,8 @@ type.defineMethods
     if inArray @_revertable, action.name
       @_changes.push action
 
-    @_events.emit action.name, action
     @_tree.finishAction action
+    @_events.emit action.name, action
     return
 
   # _findPreviousValue: (key, event) ->
