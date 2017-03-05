@@ -111,16 +111,21 @@ type.defineMethods
     else @_root
 
   observe: (node, callback) ->
-    @_didFinishAction.on (action) ->
+    @_didFinishAction (action) ->
 
-      # Observing the root node captures all actions.
-      if node.key is null
+      {key} = node
+      if key is null
         callback action
         return
 
-      # Otherwise, only actions within the node are captured.
-      return if action.target is null
-      if action.target.startsWith node.key
+      {target} = action
+      return if target is null
+
+      if key is target
+        callback action
+        return
+
+      if target.startsWith key + "."
         callback action
         return
 
