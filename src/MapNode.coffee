@@ -1,13 +1,10 @@
 
-# TODO: Finish mapping each value to a specific `ModelNode`.
-
 assertType = require "assertType"
 LazyVar = require "LazyVar"
 isType = require "isType"
 OneOf = require "OneOf"
 Event = require "eve"
 Type = require "Type"
-sync = require "sync"
 
 ArrayNode = require "./ArrayNode"
 NodeTree = LazyVar -> require "./NodeTree"
@@ -24,7 +21,8 @@ type.defineArgs [Object.Maybe]
 
 type.defineValues ->
 
-  # A map of keys to `Node` instances. Does not contain nested nodes.
+  # Contains a Node for each object or array.
+  # Does not include nested keys.
   _nodes: Object.create null
 
 type.initInstance (values, tree) ->
@@ -129,9 +127,8 @@ type.defineMethods
     return
 
   _resolve: (key) ->
-    if @_key
-    then @_key + "." + key
-    else key
+    return key unless @_key
+    return @_key + "." + key
 
   _get: (key) ->
     @_nodes[key] or @_values[key]
@@ -147,8 +144,8 @@ type.defineMethods
 
   _set: (key, value) ->
 
-    oldValue = @_values[key]
-    return value if value is oldValue
+    if value is @_values[key]
+      return value
 
     action = @_startAction "set", [key, value]
 
@@ -160,12 +157,9 @@ type.defineMethods
       @_nodes[key] = node
       @_tree.attach @_resolve(key), node
       action.args[1] = node._initialValue
+      value = node._values
 
-    @_values[key] =
-      if node
-      then node._values
-      else value
-
+    @_values[key] = value
     @_finishAction action
     return node or value
 

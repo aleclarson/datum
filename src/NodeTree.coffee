@@ -2,6 +2,7 @@
 assertType = require "assertType"
 inArray = require "in-array"
 isType = require "isType"
+isDev = require "isDev"
 Event = require "eve"
 Type = require "Type"
 has = require "has"
@@ -21,15 +22,16 @@ type.defineValues ->
   # The bottom-most node in the tree.
   _root: null
 
-  # A map of nodes by their keys. Includes nested nodes.
+  # All node instances in the tree.
+  # Each key is the absolute path to a node.
   _nodes: Object.create null
 
+  # The model type for every model node in the tree.
   # Each key is the absolute path to a model node.
-  # Each value is the model type's name.
   _modelNodes: Object.create null
 
+  # The available model types.
   # Each key is a model type's name.
-  # Each value is the model type.
   _modelTypes: Object.create null
 
   # The history of performed actions.

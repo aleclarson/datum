@@ -1,6 +1,4 @@
 
-# TODO: Combine the `options` into a single "init" action.
-
 {mutable, frozen} = require "Property"
 
 assertType = require "assertType"
@@ -21,8 +19,6 @@ type.createInstance ->
 type.definePrototype
 
   _loaders: Object.create null
-
-  # _selectors: Object.create null
 
 type.defineMethods
 
