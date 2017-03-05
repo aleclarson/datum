@@ -44,6 +44,9 @@ type.definePrototype
 
 type.defineMethods
 
+  has: (key) ->
+    undefined isnt @get key
+
   get: (key) ->
     assertType key, String
     if 1 > key.lastIndexOf "."
