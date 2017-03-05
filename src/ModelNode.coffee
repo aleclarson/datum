@@ -18,8 +18,6 @@ type.inherits MapNode
 type.createInstance ->
   return MapNode {}
 
-type.defineArgs [Object.Maybe]
-
 type.definePrototype
 
   _loaders: Object.create null
@@ -75,8 +73,7 @@ Builder = do ->
 
     _defaultKind: ModelNode
 
-    _defaultBaseCreator: (options) ->
-      return ModelNode options
+    _defaultBaseCreator: -> ModelNode()
 
   type.defineMethods
 
