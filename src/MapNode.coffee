@@ -110,22 +110,6 @@ type.defineMethods
   toString: ->
     JSON.stringify @_values
 
-  convert: (models) ->
-    assertType models, Object
-
-    @_models ?= Object.create null
-
-    for key, model of models
-
-      if @_models[key] isnt undefined
-        throw Error "Cannot convert the same key twice: '#{key}'"
-
-      if node = @_nodes[key]
-      then node.transform = model
-      else @_models[key] = model
-
-    return
-
   _resolve: (key) ->
     if @_key
     then @_key + "." + key

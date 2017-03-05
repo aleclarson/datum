@@ -4,6 +4,7 @@ inArray = require "in-array"
 isType = require "isType"
 Event = require "eve"
 Type = require "Type"
+has = require "has"
 
 ArrayNode = require "./ArrayNode"
 Node = require "./Node"
@@ -19,6 +20,14 @@ type.defineValues (root) ->
 
   # A map of nodes by their keys. Includes nested nodes.
   _nodes: Object.create null
+
+  # Each key is the absolute path to a model node.
+  # Each value is the model type's name.
+  _modelNodes: Object.create null
+
+  # Each key is a model type's name.
+  # Each value is the model type.
+  _modelTypes: Object.create null
 
   # The history of performed actions.
   _actions: []
@@ -41,6 +50,36 @@ type.defineGetters
   actions: -> @_actions
 
 type.defineMethods
+
+  convert: (models) ->
+
+    for model of models
+
+      if has @_modelTypes, model
+        throw Error "Model named '#{model}' already exists!"
+
+      @_modelTypes[model] = models[model]
+
+    for nodePath, model of @_modelNodes
+      continue unless createNode = models[model]
+
+      # Detach the map node from the tree.
+      @detach @_nodes[nodePath]
+
+      # Get the basename of `nodePath`.
+      parent = @getParent nodePath
+      key =
+        if parent._key
+        then nodePath.slice parent._key.length + 1
+        else nodePath
+
+      # Create the model node with the old values.
+      parent._nodes[key] = node = createNode parent._values[key]
+      parent._values[key] = node._values
+
+      # Attach the model node to the tree.
+      @attach nodePath, node
+    return
 
   get: (key) ->
     assertType key, String
