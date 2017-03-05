@@ -33,6 +33,16 @@ type.defineMethods
       return loader.load options
     throw Error "Cannot load the '#{key}' key!"
 
+type.overrideMethods
+
+  __onAttach: ->
+    @_tree._modelNodes[@_key] = @constructor.name
+    return
+
+  __onDetach: ->
+    delete @_tree._modelNodes[@_key]
+    @__super arguments
+
 type.defineStatics
 
   Type: (name) ->
