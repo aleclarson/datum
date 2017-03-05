@@ -107,9 +107,6 @@ type.defineMethods
       values[key] = iterator nodes[key] or value
     return values
 
-  toString: ->
-    JSON.stringify @_values
-
   _resolve: (key) ->
     if @_key
     then @_key + "." + key

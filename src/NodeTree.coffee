@@ -61,6 +61,11 @@ type.defineGetters
 
 type.defineMethods
 
+  toString: ->
+    JSON.stringify
+      values: @_root._values
+      models: @_modelNodes
+
   convert: (models) ->
 
     for model of models
