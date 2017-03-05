@@ -1,5 +1,5 @@
 
-# datum v1.0.1 ![stable](https://img.shields.io/badge/stability-stable-4EBA0F.svg?style=flat)
+# datum v1.1.0 ![stable](https://img.shields.io/badge/stability-stable-4EBA0F.svg?style=flat)
 
 One-way, serializable state trees made easy. Time-traveling and hot-reloading included.
 
