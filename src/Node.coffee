@@ -82,6 +82,8 @@ type.defineHooks
   __replayAction: ->
     throw Error "Failed to replay action!"
 
+  __onAttach: emptyFunction
+
   __onDetach: emptyFunction
 
 module.exports = type.build()

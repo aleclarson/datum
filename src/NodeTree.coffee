@@ -143,6 +143,7 @@ type.defineMethods
 
     node._key = key
     node._tree = this
+    node.__onAttach()
 
     @_nodes[key] = node
     return node
