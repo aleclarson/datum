@@ -7,16 +7,19 @@ Type = require "Type"
 has = require "has"
 
 ArrayNode = require "./ArrayNode"
+MapNode = require "./MapNode"
 Node = require "./Node"
 
 lastActionId = 0
 
 type = Type "NodeTree"
 
-type.defineValues (root) ->
+type.defineArgs [MapNode.Maybe]
+
+type.defineValues ->
 
   # The bottom-most node in the tree.
-  _root: root
+  _root: null
 
   # A map of nodes by their keys. Includes nested nodes.
   _nodes: Object.create null
@@ -40,6 +43,13 @@ type.defineValues (root) ->
 
   # Emits when any action in the tree is finished.
   _didFinishAction: Event()
+
+type.initInstance (root) ->
+  @_root =
+    if isType root, MapNode
+    then root
+    else MapNode null, this
+  return
 
 type.defineGetters
 
