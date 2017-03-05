@@ -59,11 +59,9 @@ Builder = do ->
 
   type.defineValues
 
-    _actions: null
+    _actions: Object.create null
 
-    _loaders: null
-
-    _selectors: null
+    _loadable: Object.create null
 
   type.definePrototype
 
@@ -116,7 +114,6 @@ Builder = do ->
     # Either a `Loader` instance or a `Promise` must be returned.
     defineLoaders: (loadable) ->
       assertType loadable, Object
-      @_loadable ?= Object.create @_kind::_loadable or null
       Object.assign @_loadable, loadable
       return
 
@@ -158,15 +155,20 @@ Builder = do ->
             mutable.define this, key, {value}
         return
 
-    __didBuild: (type) ->
+    __willBuild: ->
 
-      defineProto = (key, value) ->
-        if value isnt undefined
-          frozen.define type.prototype, key, {value}
-        return
+      unless @_types
+        throw Error "Must call 'defineModel' before building!"
 
-      defineProto "_actions", @_actions
-      defineProto "_loadable", @_loadable
+      inherited = @_kind.prototype
+      if inherited instanceof ModelNode
+        setProto @_actions, inherited._actions
+        setProto @_loadable, inherited._loadable
+
+      @definePrototype
+        _types: @_types
+        _actions: @_actions
+        _loadable: @_loadable
       return
 
   return type.build()
