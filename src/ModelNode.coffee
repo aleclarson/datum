@@ -3,6 +3,7 @@
 
 assertType = require "assertType"
 sliceArray = require "sliceArray"
+setProto = require "setProto"
 isType = require "isType"
 Type = require "Type"
 sync = require "sync"
@@ -59,6 +60,8 @@ Builder = do ->
 
   type.defineValues
 
+    _types: null
+
     _actions: Object.create null
 
     _loadable: Object.create null
@@ -78,17 +81,17 @@ Builder = do ->
     defineModel: (types) ->
       assertType types, Object
 
-      values = {}
-      values._types = {value: types}
-      sync.each types, (type, key) ->
-        values[key] =
+      if @_types
+        throw Error "Cannot call 'defineModel' more than once!"
+
+      @definePrototype do ->
+        sync.map types, (type, key) ->
           get: -> @_get key
           set: (value) ->
             assertType value, type, key
             @_set key, value
-        return
 
-      @definePrototype values
+      @_types = types
       return
 
     # Takes a map of functions, where each (1) mutates the tree or (2) performs more actions.
@@ -166,7 +169,7 @@ Builder = do ->
         setProto @_loadable, inherited._loadable
 
       @definePrototype
-        _types: @_types
+        _types: {value: @_types}
         _actions: @_actions
         _loadable: @_loadable
       return
