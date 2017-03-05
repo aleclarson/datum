@@ -107,6 +107,17 @@ type.defineMethods
       values[key] = iterator nodes[key] or value
     return values
 
+  _initialize: (values) ->
+    for key, value of values
+
+      if node = @_createNode value
+        @_nodes[key] = node
+        @_tree.attach @_resolve(key), node
+        value = node._values
+
+      @_values[key] = value
+    return
+
   _resolve: (key) ->
     if @_key
     then @_key + "." + key
