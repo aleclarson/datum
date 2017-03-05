@@ -33,6 +33,8 @@ type.defineValues (values) ->
 
 type.definePrototype
 
+  tree: get: -> @_tree
+
   # The default registry of performable actions. Never mutate this!
   _actions: Object.create null
 
