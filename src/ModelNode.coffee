@@ -98,20 +98,14 @@ Builder = do ->
     # All performed actions can be reversed or replayed.
     defineActions: (actions) ->
       assertType actions, Object
-
-      methods = {}
-      sync.each actions, (_, name) ->
-        methods[name] = ->
+      Object.assign @_actions, actions
+      @defineMethods do ->
+        sync.map actions, (_, name) -> ->
           args = if arguments.length then sliceArray arguments else null
           action = @_startAction name, args
           result = @_actions[name].apply this, args
           @_finishAction action
           return result
-        return
-
-      @_actions ?= Object.create @_kind::_actions or null
-      Object.assign @_actions, actions
-      return
 
     # Takes a map of functions, where each loads one or more keys.
     # Either a `Loader` instance or a `Promise` must be returned.
