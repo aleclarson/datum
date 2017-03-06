@@ -56,7 +56,6 @@ type.defineMethods
     action = {target: @_key, name}
     action.args = args if args
 
-    @_tree ?= NodeTree.call this
     return @_tree.startAction action
 
   _finishAction: (action) ->
