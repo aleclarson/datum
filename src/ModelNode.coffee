@@ -1,10 +1,9 @@
 
-# TODO: Combine the `options` into a single "init" action.
-
 {mutable, frozen} = require "Property"
 
 assertType = require "assertType"
 sliceArray = require "sliceArray"
+setProto = require "setProto"
 isType = require "isType"
 Type = require "Type"
 sync = require "sync"
@@ -18,13 +17,9 @@ type.inherits MapNode
 type.createInstance ->
   return MapNode {}
 
-type.defineArgs [Object.Maybe]
-
 type.definePrototype
 
   _loaders: Object.create null
-
-  # _selectors: Object.create null
 
 type.defineMethods
 
@@ -32,6 +27,16 @@ type.defineMethods
     if loader = @_loaders[key]
       return loader.load options
     throw Error "Cannot load the '#{key}' key!"
+
+type.overrideMethods
+
+  __onAttach: ->
+    @_tree._modelNodes[@_key] = @constructor.name
+    return
+
+  __onDetach: ->
+    delete @_tree._modelNodes[@_key]
+    @__super arguments
 
 type.defineStatics
 
@@ -55,18 +60,17 @@ Builder = do ->
 
   type.defineValues
 
-    _actions: null
+    _types: null
 
-    _loaders: null
+    _actions: Object.create null
 
-    _selectors: null
+    _loadable: Object.create null
 
   type.definePrototype
 
     _defaultKind: ModelNode
 
-    _defaultBaseCreator: (options) ->
-      return ModelNode options
+    _defaultBaseCreator: -> ModelNode()
 
   type.defineMethods
 
@@ -77,43 +81,36 @@ Builder = do ->
     defineModel: (types) ->
       assertType types, Object
 
-      values = {}
-      values._types = {value: types}
-      sync.each types, (type, key) ->
-        values[key] =
+      if @_types
+        throw Error "Cannot call 'defineModel' more than once!"
+
+      @definePrototype do ->
+        sync.map types, (type, key) ->
           get: -> @_get key
           set: (value) ->
             assertType value, type, key
             @_set key, value
-        return
 
-      @definePrototype values
+      @_types = types
       return
 
     # Takes a map of functions, where each (1) mutates the tree or (2) performs more actions.
     # All performed actions can be reversed or replayed.
     defineActions: (actions) ->
       assertType actions, Object
-
-      methods = {}
-      sync.each actions, (_, name) ->
-        methods[name] = ->
+      Object.assign @_actions, actions
+      @defineMethods do ->
+        sync.map actions, (_, name) -> ->
           args = if arguments.length then sliceArray arguments else null
           action = @_startAction name, args
           result = @_actions[name].apply this, args
           @_finishAction action
           return result
-        return
-
-      @_actions ?= Object.create @_kind::_actions or null
-      Object.assign @_actions, actions
-      return
 
     # Takes a map of functions, where each loads one or more keys.
     # Either a `Loader` instance or a `Promise` must be returned.
     defineLoaders: (loadable) ->
       assertType loadable, Object
-      @_loadable ?= Object.create @_kind::_loadable or null
       Object.assign @_loadable, loadable
       return
 
@@ -155,15 +152,20 @@ Builder = do ->
             mutable.define this, key, {value}
         return
 
-    __didBuild: (type) ->
+    __willBuild: ->
 
-      defineProto = (key, value) ->
-        if value isnt undefined
-          frozen.define type.prototype, key, {value}
-        return
+      unless @_types
+        throw Error "Must call 'defineModel' before building!"
 
-      defineProto "_actions", @_actions
-      defineProto "_loadable", @_loadable
+      inherited = @_kind.prototype
+      if inherited instanceof ModelNode
+        setProto @_actions, inherited._actions
+        setProto @_loadable, inherited._loadable
+
+      @definePrototype
+        _types: {value: @_types}
+        _actions: @_actions
+        _loadable: @_loadable
       return
 
   return type.build()

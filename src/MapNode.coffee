@@ -1,29 +1,34 @@
 
-# TODO: Finish mapping each value to a specific `ModelNode`.
-
 assertType = require "assertType"
+LazyVar = require "LazyVar"
 isType = require "isType"
 OneOf = require "OneOf"
 Event = require "eve"
 Type = require "Type"
-sync = require "sync"
 
 ArrayNode = require "./ArrayNode"
-NodeTree = require "./NodeTree"
+NodeTree = LazyVar -> require "./NodeTree"
 Node = require "./Node"
 
 type = Type "MapNode"
 
 type.inherits Node
 
-type.createInstance (values) ->
-  assertType values, Object.Maybe
-  return Node values or {}
+type.createInstance ->
+  return Node {}
+
+type.defineArgs [Object.Maybe]
 
 type.defineValues ->
 
-  # A map of keys to `Node` instances. Does not contain nested nodes.
+  # Contains a Node for each object or array.
+  # Does not include nested keys.
   _nodes: Object.create null
+
+type.initInstance (values, tree) ->
+  @_tree = tree or NodeTree.call this
+  @_initialize values if values
+  return
 
 type.defineGetters
 
@@ -37,11 +42,28 @@ type.definePrototype
 
 type.defineMethods
 
+  has: (key) ->
+    undefined isnt @get key
+
   get: (key) ->
     assertType key, String
     if 1 > key.lastIndexOf "."
     then @_get key
     else @_tree.get @_resolve key
+
+  observe: (key, callback) ->
+
+    if arguments.length is 1
+      assertType callback = key, Function
+      return @_tree.observe this, callback
+
+    assertType key, String
+    assertType callback, Function
+    @_getParent key
+    .on "set", (event) ->
+      if key is event.args[0]
+        callback event.args[1]
+      return
 
   set: (key, value) ->
     assertType key, String
@@ -93,29 +115,20 @@ type.defineMethods
       values[key] = iterator nodes[key] or value
     return values
 
-  toString: ->
-    JSON.stringify @_values
+  _initialize: (values) ->
+    for key, value of values
 
-  convert: (models) ->
-    assertType models, Object
+      if node = @_createNode value
+        @_nodes[key] = node
+        @_tree.attach @_resolve(key), node
+        value = node._values
 
-    @_models ?= Object.create null
-
-    for key, model of models
-
-      if @_models[key] isnt undefined
-        throw Error "Cannot convert the same key twice: '#{key}'"
-
-      if node = @_nodes[key]
-      then node.transform = model
-      else @_models[key] = model
-
+      @_values[key] = value
     return
 
   _resolve: (key) ->
-    if @_key
-    then @_key + "." + key
-    else key
+    return key unless @_key
+    return @_key + "." + key
 
   _get: (key) ->
     @_nodes[key] or @_values[key]
@@ -123,38 +136,30 @@ type.defineMethods
   _getParent: (key) ->
     @_tree.getParent @_resolve key
 
+  _createNode: (value) ->
+    return MapNode value, @_tree if isType value, Object
+    return ArrayNode value if isType value, Array
+    return value if value instanceof Node
+    return null
+
   _set: (key, value) ->
 
-    oldValue = @_values[key]
-    return value if value is oldValue
+    if value is @_values[key]
+      return value
 
     action = @_startAction "set", [key, value]
 
     if node = @_nodes[key]
-      @_tree._detachNode node
+      @_tree.detach node
       delete @_nodes[key]
 
-    @_tree ?= NodeTree this
-
-    if value instanceof Node
-      node = value
-
-    else if isType value, Object
-      node = MapNode value
-
-    else if isType value, Array
-      node = ArrayNode value
-
-    if node isnt undefined
+    if node = @_createNode value
       @_nodes[key] = node
       @_tree.attach @_resolve(key), node
-      value = node._initialValue
+      action.args[1] = node._initialValue
+      value = node._values
 
-    @_values[key] =
-      if node
-      then node._values
-      else value
-
+    @_values[key] = value
     @_finishAction action
     return node or value
 
@@ -193,7 +198,7 @@ type.overrideMethods
 
   __onDetach: ->
     for key, node of @_nodes
-      @_tree._detachNode node
+      @_tree.detach node
     return
 
 module.exports = MapNode = type.build()

@@ -33,6 +33,8 @@ type.defineValues (values) ->
 
 type.definePrototype
 
+  tree: get: -> @_tree
+
   # The default registry of performable actions. Never mutate this!
   _actions: Object.create null
 
@@ -54,7 +56,6 @@ type.defineMethods
     action = {target: @_key, name}
     action.args = args if args
 
-    @_tree ?= NodeTree.call this
     return @_tree.startAction action
 
   _finishAction: (action) ->
@@ -63,8 +64,8 @@ type.defineMethods
     if inArray @_revertable, action.name
       @_changes.push action
 
-    @_events.emit action.name, action
     @_tree.finishAction action
+    @_events.emit action.name, action
     return
 
   # _findPreviousValue: (key, event) ->
@@ -81,6 +82,8 @@ type.defineHooks
 
   __replayAction: ->
     throw Error "Failed to replay action!"
+
+  __onAttach: emptyFunction
 
   __onDetach: emptyFunction
 
