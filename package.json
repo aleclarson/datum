@@ -1,0 +1,20 @@
+{
+  "name": "datum",
+  "version": "1.1.0",
+  "main": "js/index",
+  "dependencies": {
+    "LazyVar": "aleclarson/LazyVar#2.2.0",
+    "OneOf": "aleclarson/OneOf#1.0.1",
+    "Property": "aleclarson/Property#1.2.3",
+    "Type": "aleclarson/Type#2.3.1",
+    "assertType": "aleclarson/assertType#2.0.1",
+    "emptyFunction": "aleclarson/emptyFunction#1.0.0",
+    "eve": "aleclarson/eve#1.0.3",
+    "has": "aleclarson/has#1.0.0",
+    "in-array": "aleclarson/in-array#1.0.0",
+    "isDev": "aleclarson/isDev#2.0.0",
+    "isType": "aleclarson/isType#1.0.1",
+    "sliceArray": "aleclarson/sliceArray#1.0.0",
+    "sync": "aleclarson/sync#1.0.2"
+  }
+}
