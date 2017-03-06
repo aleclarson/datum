@@ -15,7 +15,7 @@ lastActionId = 0
 
 type = Type "NodeTree"
 
-type.defineArgs [MapNode.or String.Maybe]
+type.defineArgs [MapNode.Kind.or String.Maybe]
 
 type.defineValues ->
 
@@ -49,9 +49,8 @@ type.defineValues ->
 type.initInstance (root) ->
 
   @_root =
-    if isType root, MapNode
-    then root
-    else MapNode null, this
+    if root instanceof MapNode
+    then root else MapNode null, this
 
   if isType root, String
     root = JSON.parse root
