@@ -86,7 +86,7 @@ type.defineMethods
       continue unless createNode = models[model]
 
       # Detach the map node from the tree.
-      @detach @_nodes[nodePath]
+      @detach node if node = @_nodes[nodePath]
 
       # Get the basename of `nodePath`.
       parent = @getParent nodePath
