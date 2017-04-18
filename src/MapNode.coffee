@@ -1,12 +1,11 @@
 
 assertType = require "assertType"
 LazyVar = require "LazyVar"
+hasKeys = require "hasKeys"
 isType = require "isType"
-OneOf = require "OneOf"
-Event = require "eve"
 Type = require "Type"
+has = require "has"
 
-ArrayNode = require "./ArrayNode"
 NodeTree = LazyVar -> require "./NodeTree"
 Node = require "./Node"
 
@@ -14,56 +13,23 @@ type = Type "MapNode"
 
 type.inherits Node
 
-type.createInstance ->
-  return Node {}
+type.createInstance (tree) ->
+  return Node {}, tree
 
-type.defineArgs [Object.Maybe]
-
-type.defineValues ->
-
-  # Contains a Node for each object or array.
-  # Does not include nested keys.
-  _nodes: Object.create null
-
-type.initInstance (values, tree) ->
-  @_tree = tree or NodeTree.call this
-  @_initialize values if values
+type.initInstance ->
+  @_tree ?= NodeTree.call this
   return
-
-type.defineGetters
-
-  key: -> @_key
-
-  _initialValue: -> Object.assign {}, @_values
-
-type.definePrototype
-
-  _revertable: ["set", "delete"]
 
 type.defineMethods
 
   has: (key) ->
-    undefined isnt @get key
+    @_values.hasOwnProperty key
 
   get: (key) ->
     assertType key, String
     if 1 > key.lastIndexOf "."
-    then @_get key
-    else @_tree.get @_resolve key
-
-  observe: (key, callback) ->
-
-    if arguments.length is 1
-      assertType callback = key, Function
-      return @_tree.observe this, callback
-
-    assertType key, String
-    assertType callback, Function
-    @_getParent key
-    .on "set", (event) ->
-      if key is event.args[0]
-        callback event.args[1]
-      return
+    then @_nodes[key] or @_values[key]
+    else @_tree.get @_resolve(key)
 
   set: (key, value) ->
     assertType key, String
@@ -89,9 +55,10 @@ type.defineMethods
 
   merge: (values) ->
     assertType values, Object
-    action = @_startAction "merge", [values]
+    return unless hasKeys values
+    @_startAction "merge", [values]
     @_set key, value for key, value of values
-    @_finishAction action
+    @_finishAction()
     return
 
   forEach: (iterator) ->
@@ -115,78 +82,97 @@ type.defineMethods
       values[key] = iterator nodes[key] or value
     return values
 
-  _initialize: (values) ->
-    for key, value of values
+#
+# Internal
+#
 
-      if node = @_createNode value
-        @_nodes[key] = node
-        @_tree.attach @_resolve(key), node
-        value = node._values
+type.defineValues ->
 
-      @_values[key] = value
-    return
+  _nodes: Object.create null
 
-  _resolve: (key) ->
-    return key unless @_key
-    return @_key + "." + key
+  _refs: Object.create null
+
+type.defineGetters
+
+  _initialValue: -> {}
+
+type.definePrototype
+
+  _revertable: Object.create
+    constructor: null
+    ref: 1
+    set: 1
+    delete: 1
+
+type.defineMethods
 
   _get: (key) ->
-    @_nodes[key] or @_values[key]
-
-  _getParent: (key) ->
-    @_tree.getParent @_resolve key
-
-  _createNode: (value) ->
-    return MapNode value, @_tree if isType value, Object
-    return ArrayNode value if isType value, Array
-    return value if value instanceof Node
-    return null
+    if ref = @_refs[key]
+    then @_tree._nodes[ref]
+    else @_nodes[key] or @_values[key]
 
   _set: (key, value) ->
 
     if value is @_values[key]
       return value
 
-    action = @_startAction "set", [key, value]
+    if has @_refs, key
+      delete @_refs[key]
 
-    if node = @_nodes[key]
+    else if node = @_nodes[key]
       @_tree.detach node
       delete @_nodes[key]
 
-    if node = @_createNode value
-      @_nodes[key] = node
+    if isType value, Object
+      node = MapNode @_tree
       @_tree.attach @_resolve(key), node
-      action.args[1] = node._initialValue
-      value = node._values
 
+      @_startAction "set", [key, node._initialValue]
+      @_nodes[key] = node
+      @_values[key] = node._values
+      @_finishAction()
+
+      node.merge value
+      return node
+
+    else if value instanceof Node
+      node = value
+
+      if @_tree isnt node._tree
+        throw Error "Cannot attach a node unless in the same tree!"
+
+      @_startAction "ref", [key, node._key]
+      @_refs[key] = node._key
+      @_finishAction()
+      return node
+
+    @_startAction "set", [key, value]
     @_values[key] = value
-    @_finishAction action
-    return node or value
+    @_finishAction()
+    return value
 
   _delete: (key) ->
-    action = @_startAction "delete", [key]
+    @_startAction "delete", [key]
 
-    if node = @_nodes[key]
+    if has @_refs, key
+      delete @_refs[key]
+
+    else if node = @_nodes[key]
       @_tree.detach node
       delete @_nodes[key]
 
     delete @_values[key]
-    @_finishAction action
+    @_finishAction()
     return
 
 type.overrideMethods
 
+  __initialize: (values) ->
+    if isType values, Object
+      @merge values
+      return
+
   __revertAction: (name, args) ->
-
-    if name is "set"
-      throw Error "not implemented"
-      return
-
-    if name is "delete"
-      throw Error "not implemented"
-      return
-
-  __replayAction: (name, args) ->
 
     if name is "set"
       throw Error "not implemented"

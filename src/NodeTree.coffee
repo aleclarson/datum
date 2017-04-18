@@ -1,13 +1,14 @@
 
 assertType = require "assertType"
+LazyVar = require "LazyVar"
 inArray = require "in-array"
-isType = require "isType"
 isDev = require "isDev"
 Event = require "eve"
 Type = require "Type"
+sync = require "sync"
 has = require "has"
 
-ArrayNode = require "./ArrayNode"
+ActionStack = require "./ActionStack"
 MapNode = require "./MapNode"
 Node = require "./Node"
 
@@ -15,48 +16,11 @@ lastActionId = 0
 
 type = Type "NodeTree"
 
-type.defineArgs [MapNode.Kind.or String.Maybe]
+type.defineArgs [Node.Kind]
 
 type.defineValues ->
 
-  # The bottom-most node in the tree.
-  _root: null
-
-  # All node instances in the tree.
-  # Each key is the absolute path to a node.
-  _nodes: Object.create null
-
-  # The model type for every model node in the tree.
-  # Each key is the absolute path to a model node.
-  _modelNodes: Object.create null
-
-  # The available model types.
-  # Each key is a model type's name.
-  _modelTypes: Object.create null
-
-  # The history of performed actions.
-  _actions: []
-
-  # The action being performed now.
-  _currentAction: null
-
-  # The stack of actions where a nested action took over as `currentAction`.
-  _parentActions: []
-
-  # Emits when any action in the tree is finished.
-  _didFinishAction: Event()
-
-type.initInstance (root) ->
-
-  @_root =
-    if root instanceof MapNode
-    then root else MapNode null, this
-
-  if isType root, String
-    root = JSON.parse root
-    @_root._initialize root.values
-    Object.assign @_modelNodes, root.models
-  return
+  actions: []
 
 type.defineGetters
 
@@ -64,53 +28,13 @@ type.defineGetters
 
   currentAction: -> @_currentAction
 
-  actions: -> @_actions
-
 type.defineMethods
-
-  toString: ->
-    JSON.stringify
-      values: @_root._values
-      models: @_modelNodes
-
-  convert: (models) ->
-
-    for model of models
-
-      if has @_modelTypes, model
-        throw Error "Model named '#{model}' already exists!"
-
-      @_modelTypes[model] = models[model]
-
-    for nodePath, model of @_modelNodes
-      continue unless createNode = models[model]
-
-      # Detach the map node from the tree.
-      @detach node if node = @_nodes[nodePath]
-
-      # Get the basename of `nodePath`.
-      parent = @getParent nodePath
-      key =
-        if parent._key
-        then nodePath.slice parent._key.length + 1
-        else nodePath
-
-      # Create the model node with the old values.
-      parent._nodes[key] = node = createNode parent._values[key]
-      parent._values[key] = node._values
-
-      # Attach the model node to the tree.
-      @attach nodePath, node
-    return
 
   get: (key) ->
     assertType key, String
 
     return node if node = @_nodes[key]
     return unless node = @getParent key
-
-    if isType node, ArrayNode
-      throw Error "Cannot use array indexes with dot-notation!"
 
     if node._key
     then node._get key.slice node._key.length + 1
@@ -122,31 +46,17 @@ type.defineMethods
     then @_nodes[key.slice 0, dot] or null
     else @_root
 
-  observe: (node, callback) ->
-    @_didFinishAction (action) ->
-
-      {key} = node
-      if key is null
-        callback action
-        return
-
-      {target} = action
-      return if target is null
-
-      if key is target
-        callback action
-        return
-
-      if target.startsWith key + "."
-        callback action
-        return
+  resolve: (node, key) ->
+    return @_nodes[node._resolve key]
 
   attach: (key, node) ->
     assertType key, String
-    assertType node, Node.Kind
 
     if isDev and @_nodes[key]
       throw Error "A node named '#{key}' already exists!"
+
+    if isDev and node._tree isnt this
+      throw Error "Node already belongs to another tree!"
 
     node._key = key
     node._tree = this
@@ -156,37 +66,42 @@ type.defineMethods
     return node
 
   detach: (node) ->
-    delete @_nodes[node._key]
+    assertType node, Node.Kind
+
     node.__onDetach()
     node._tree = null
     node._key = null
+
+    delete @_nodes[node._key]
     return
 
-  startAction: (action) ->
-    assertType action, Object
+  startAction: (target, name, args) ->
 
-    if parent = @_currentAction
-      @_parentActions.push parent
+    assertType target, String.Maybe
+    assertType name, String
+    assertType args, Array.Maybe
 
-    @_currentAction = action
-    action.id = ++lastActionId
+    id = ++lastActionId
+    action = {id, target, name}
+    action.args = args if args
     action.changes = []
+    action.tree = this
+
+    ActionStack.push action
     return action
 
-  finishAction: (action) ->
-    assertType action, Object
+  finishAction: ->
 
-    if action isnt @_currentAction
-      throw Error "Must finish the current action first!"
+    action = ActionStack.pop()
+
+    if parent = ActionStack.current
+    then parent.changes.push action
+    else @actions.push action
 
     unless action.changes.length
       delete action.changes
 
-    if @_currentAction = @_parentActions.pop() or null
-    then @_currentAction.changes.push action
-    else @_actions.push action
-
-    @_didFinishAction.emit action
+    delete action.tree
     return action
 
   revertAction: (action) ->
@@ -208,6 +123,18 @@ type.defineMethods
     node.__revertAction action.name, action.args
     return
 
+#
+# Internal
+#
+
+type.defineValues (root) ->
+
+  _root: root
+
+  _nodes: Object.create null
+
+type.defineMethods
+
   _replayAction: (action) ->
     assertType action, Object
 
@@ -220,23 +147,6 @@ type.defineMethods
       throw Error "Missing node for key: '#{action.target}'"
 
     node.__replayAction action.name, action.args
-    return
-
-  # NOTE: The '_actions' history is not currently copied over.
-  _mergeTree: (key, root) ->
-    assertType key, String
-    assertType root, Node.Kind
-
-    if this is tree = root._tree
-      throw Error "That node is already attached to this tree!"
-
-    nodes = @_nodes
-    sync.each tree._nodes, (node, path) ->
-      node._key = key + "." + path
-      nodes[node._key] = node
-
-    root._key = key
-    root._tree = this
     return
 
 module.exports = type.build()
