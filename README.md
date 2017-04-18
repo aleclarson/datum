@@ -1,145 +1,75 @@
 
 # jar v1.1.0 ![stable](https://img.shields.io/badge/stability-stable-4EBA0F.svg?style=flat)
 
-One-way, serializable state trees made easy. Time-traveling and hot-reloading included.
+Preservable state trees for Javascript.
 
-## synopsis
-
-[**Node**](#node):
-- Nodes are encapsulated objects.
-- Nodes can be targeted by actions.
-- Nodes track all changes to their values.
-
-[**MapNode**](#mapnode):
-- Supports nesting other nodes.
-
-[**ArrayNode**](#arraynode):
-- Cannot contain other nodes (yet?).
-
-[**ModelNode**](#modelnode):
-- Provides a getter & setter for each serialized key.
-- Supports ephemeral properties.
-
-[**NodeTree**](#nodetree):
-- Keeps a map to every node in the tree.
-- Keeps a history of all performed actions.
-
----
-
-## api reference
-
-### MapNode
-
-The `MapNode` class encapsulates a plain object.
-
-### ArrayNode
-
-The `ArrayNode` class encapsulates an array.
-
-#### `length`
-
-The number of values in the array.
-
-#### `get(index)`
-
-Returns the value for the given `index`.
-
-Returns `undefined` if the `index` does not exist.
-
-#### `set(index, value)`
-
-Sets the value for the given `index`.
-
-Sparse arrays are supported.
-
-#### `delete(index)`
-
-Removes a value from the array by its `index`.
-
-#### `insert(index, value)`
-
-Adds a value to the array at the given `index`.
-
-#### `push(value)`
-
-Adds a value to the end of the array.
-
-#### `unshift(value)`
-
-Adds a value to the start of the array.
-
-#### `insertAll(index, values)`
-
-Splices an array into the array at the given `index`.
-
-#### `pushAll(values)`
-
-Concatenates an array to the end of the array.
-
-#### `unshiftAll(values)`
-
-Concatenates an array to the start of the array.
-
-#### `slice(index, length)`
-
-Creates a new array using the given `index` and `length`.
-
-#### `forEach(iterator)`
-
-Calls the `iterator` for each key/value pair in the array.
-
-The `iterator` function signature is `(value, key)`.
-
-#### `filter(iterator)`
-
-Calls the `iterator` for each key/value pair in the array.
-
-The `iterator` function signature is `(value, key)`.
-
-Whenever `true` is returned by the `iterator`, the current key/value pair is skipped.
-
-A new array of the unfiltered values is returned.
-
-#### `map(iterator)`
-
-Calls the `iterator` for each key/value pair in the array.
-
-The `iterator` function signature is `(value, key)`.
-
-The value returned by the `iterator` is added to the results.
-
-A new array of mapped values is returned.
-
-### ModelNode
-
-### NodeTree
+- **Coming soon:** time traveling & hot reloading
 
 ### Node
 
-The `Node` class is the starting point for all node types.
+An atom of data which can be serialized.
 
-#### `tree`
+- Referenced within the state tree using a key path.
+- May be targeted by actions (which can be reverted & replayed).
+- Keeps a history of all mutations to its internal data.
 
-The `NodeTree` that this node is attached to.
+**Methods:**
+- `on(action, callback)`
+- `once(action, callback)`
+- `observe(key, callback)`
+- `toString()`
 
-#### `on(action, callback)`
+### MapNode
 
-Listen for actions with a specific name.
+A map of atoms.
 
-Use the `once` method for one-time listeners.
+- Subclass of `Node`
 
-#### `__onAttach()`
+**Methods:**
+- `get(key)`
+- `set(key, value)`
+- `merge(values)`
+- `delete(key)`
+- `forEach(iterator)`
+- `filter(iterator)`
+- `map(iterator)`
 
-A hook called when attached to a `NodeTree`.
+### Entity
 
-#### `__onDetach()`
+A group of atoms with specialized actions and temporal data.
 
-A hook called when detached from a `NodeTree`.
+- Subclass of `Node`
+- Must be created within an action.
+- Provides a getter and setter for each serialized atom.
+- May provide keys which can be loaded asynchronously.
+- Defined using an `Entity.Type` instance.
 
----
+**Methods:**
+- `load(key, options)`
 
-## roadmap
+### NodeList
 
-- Support `ModelNode` instances nested within other `ModelNode` instances.
-- Support `ModelNode` instances within arrays.
+An ordered set of atoms.
 
+- Subclass of `Node`
+
+**Properties:**
+- `length: Number`
+
+**Methods:**
+- `get(index)`
+- `append(node)`
+- `prepend(node)`
+- `remove(node)`
+- `move(node, index)`
+- `forEach(iterator)`
+- `toArray()`
+
+### NodeTree
+
+A branch of atoms which can be serialized.
+
+- Keeps a history of all actions performed on atoms attached to it.
+
+**Properties:**
+- `actions: Array`
