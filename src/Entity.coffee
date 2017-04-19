@@ -2,7 +2,6 @@
 emptyFunction = require "emptyFunction"
 Type = require "Type"
 
-ActionStack = require "./ActionStack"
 MapNode = require "./MapNode"
 Node = require "./Node"
 
@@ -33,16 +32,6 @@ type.defineMethods
 type.defineValues ->
 
   _nodes: Object.create null
-
-  _refs: Object.create null
-
-type.initInstance ->
-
-  unless action = ActionStack.current
-    throw Error "Must construct within an action!"
-
-  @_tree = action.tree
-  return
 
 type.defineGetters
 

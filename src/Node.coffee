@@ -1,8 +1,11 @@
 
 emptyFunction = require "emptyFunction"
 assertType = require "assertType"
+LazyVar = require "LazyVar"
 Event = require "eve"
 Type = require "Type"
+
+NodeTree = LazyVar -> require "./NodeTree"
 
 type = Type "Node"
 
@@ -30,7 +33,7 @@ type.defineMethods
 # Internal
 #
 
-type.defineValues (values, tree) ->
+type.defineValues (values) ->
 
   # The absolute path to this node.
   _key: null
@@ -45,7 +48,7 @@ type.defineValues (values, tree) ->
   _changes: []
 
   # The tree this node belongs to.
-  _tree: tree or null
+  _tree: NodeTree.call this
 
 type.definePrototype
 
@@ -63,7 +66,16 @@ type.defineMethods
     return @_key + "." + key
 
   _getParent: (key) ->
-    @_tree.getParent @_resolve(key)
+
+    key = @_resolve key
+    dot = key.lastIndexOf "."
+    return @_tree._root if dot < 0
+
+    key = key.slice 0, dot
+    key = ref if ref = @_tree._refs[key]
+    return node if node = @_tree._nodes[key]
+
+    throw Error "Invalid key has no parent: '#{key}'"
 
   _startAction: (name, args) ->
     @_tree.startAction @_key, name, args
@@ -86,8 +98,6 @@ type.defineHooks
   __revertAction: emptyFunction
 
   __replayAction: emptyFunction
-
-  __onAttach: emptyFunction
 
   __onDetach: emptyFunction
 

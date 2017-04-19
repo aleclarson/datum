@@ -1,6 +1,5 @@
 
 assertType = require "assertType"
-isDev = require "isDev"
 Type = require "Type"
 
 Node = require "./Node"
@@ -9,8 +8,8 @@ type = Type "NodeList"
 
 type.inherits Node
 
-type.createInstance (tree) ->
-  return Node [], tree
+type.createInstance ->
+  return Node []
 
 type.defineGetters
 
@@ -20,15 +19,15 @@ type.defineMethods
 
   get: (index) ->
     assertType index, Number
-    ref = @_values[index]
-    if ref isnt undefined
-      return @_tree._refs[ref]
+    key = @_values[index]
+    if key isnt undefined
+      return @_tree._nodes[key]
 
   append: (node) ->
     assertType node, Node.Kind
 
-    if isDev and node._tree isnt @_tree
-      throw Error "Nodes must be attached to the same tree!"
+    unless node._key
+      throw Error "Cannot append a node with no key!"
 
     @_startAction "append", [node._key]
     @_values.push node._key
@@ -38,8 +37,8 @@ type.defineMethods
   prepend: (node) ->
     assertType node, Node.Kind
 
-    if isDev and node._tree isnt @_tree
-      throw Error "Nodes must be attached to the same tree!"
+    unless node._key
+      throw Error "Cannot prepend a node with no key!"
 
     @_startAction "prepend", [node._key]
     @_values.unshift node._key
@@ -70,15 +69,15 @@ type.defineMethods
     return
 
   forEach: (iterator) ->
-    refs = @_tree._refs
+    nodes = @_tree._nodes
     for key, index in @_values
-      iterator refs[key], index
+      iterator nodes[key], index
     return
 
   toArray: ->
-    refs = @_tree._refs
+    nodes = @_tree._nodes
     return @_values.map (key) ->
-      return refs[key]
+      return nodes[key]
 
 #
 # Internal

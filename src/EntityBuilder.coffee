@@ -6,6 +6,7 @@ isType = require "isType"
 Type = require "Type"
 sync = require "sync"
 
+MapNode = require "./MapNode"
 Action = require "./Action"
 Entity = require "./Entity"
 

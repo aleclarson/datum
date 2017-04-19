@@ -1,15 +1,11 @@
 
 assertType = require "assertType"
-LazyVar = require "LazyVar"
-inArray = require "in-array"
 isDev = require "isDev"
 Event = require "eve"
 Type = require "Type"
 sync = require "sync"
-has = require "has"
 
-ActionStack = require "./ActionStack"
-MapNode = require "./MapNode"
+NodeList = require "./NodeList"
 Node = require "./Node"
 
 lastActionId = 0
@@ -30,40 +26,31 @@ type.defineGetters
 
 type.defineMethods
 
-  get: (key) ->
-    assertType key, String
-
-    return node if node = @_nodes[key]
-    return unless node = @getParent key
-
-    if node._key
-    then node._get key.slice node._key.length + 1
-    else node._get key
-
-  getParent: (key) ->
-    assertType key, String
-    if 0 < dot = key.lastIndexOf "."
-    then @_nodes[key.slice 0, dot] or null
-    else @_root
-
-  resolve: (node, key) ->
-    return @_nodes[node._resolve key]
-
   attach: (key, node) ->
     assertType key, String
+    assertType node, Node.Kind
 
     if isDev and @_nodes[key]
       throw Error "A node named '#{key}' already exists!"
 
-    if isDev and node._tree isnt this
-      throw Error "Node already belongs to another tree!"
+    if isDev and node._tree is this
+      throw Error "Cannot attach a node more than once!"
+
+    if node._tree
+      @_mergeTree key, node
 
     node._key = key
     node._tree = this
-    node.__onAttach()
 
     @_nodes[key] = node
     return node
+
+  attachRef: (key, node) ->
+    assertType key, String
+    assertType node, Node.Kind
+
+    @_refs[key] = node._key
+    return
 
   detach: (node) ->
     assertType node, Node.Kind
@@ -85,29 +72,28 @@ type.defineMethods
     action = {id, target, name}
     action.args = args if args
     action.changes = []
-    action.tree = this
 
-    ActionStack.push action
+    @_pendingActions.push @_currentAction
+    @_currentAction = action
     return action
 
   finishAction: ->
 
-    action = ActionStack.pop()
-
-    if parent = ActionStack.current
-    then parent.changes.push action
-    else @actions.push action
+    action = @_currentAction
 
     unless action.changes.length
       delete action.changes
 
-    delete action.tree
+    if @_currentAction = @_pendingActions.pop()
+    then @_currentAction.changes.push action
+    else @actions.push action
+
     return action
 
   revertAction: (action) ->
     assertType action, Object
 
-    unless inArray node._revertable, action.name
+    unless node._revertable[action.name]
       if changes = action.changes
         @_revertChange change for change in changes
       return
@@ -133,6 +119,12 @@ type.defineValues (root) ->
 
   _nodes: Object.create null
 
+  _refs: Object.create null
+
+  _currentAction: null
+
+  _pendingActions: []
+
 type.defineMethods
 
   _replayAction: (action) ->
@@ -149,4 +141,43 @@ type.defineMethods
     node.__replayAction action.name, action.args
     return
 
-module.exports = type.build()
+  # NOTE: The '_actions' history is not currently copied over.
+  _mergeTree: (key, node) ->
+    tree = node._tree
+
+    unless node is tree._root
+      throw Error "Must call `_mergeTree` with the root node!"
+
+    nodes = @_nodes
+    sync.each tree._nodes, (node, path) ->
+      node._key = key + "." + path
+
+      if node instanceof NodeList
+        node._values = sync.map node._values, (path) ->
+          return key + "." + path
+
+      node._tree = this
+      nodes[node._key] = node
+      return
+
+    refs = @_refs
+    sync.each tree._refs, (path, ref) ->
+      refs[key + "." + ref] = key + "." + path
+      return
+
+    actions = @actions
+    sync.each tree.actions, (action) ->
+
+      if action.name is "ref"
+        path = action.args[1]
+        action.args[1] = key + "." + path
+
+      actions.push action
+      action.target =
+        if path = action.target
+        then key + "." + path
+        else key
+      return
+    return
+
+module.exports = NodeTree = type.build()

@@ -1,24 +1,18 @@
 
 assertType = require "assertType"
-LazyVar = require "LazyVar"
 hasKeys = require "hasKeys"
 isType = require "isType"
+isDev = require "isDev"
 Type = require "Type"
-has = require "has"
 
-NodeTree = LazyVar -> require "./NodeTree"
 Node = require "./Node"
 
 type = Type "MapNode"
 
 type.inherits Node
 
-type.createInstance (tree) ->
-  return Node {}, tree
-
-type.initInstance ->
-  @_tree ?= NodeTree.call this
-  return
+type.createInstance ->
+  return Node {}
 
 type.defineMethods
 
@@ -27,31 +21,25 @@ type.defineMethods
 
   get: (key) ->
     assertType key, String
-    if 1 > key.lastIndexOf "."
-    then @_nodes[key] or @_values[key]
-    else @_tree.get @_resolve(key)
+    if 0 < key.indexOf "."
+      return @_follow key
+    return @_get key
 
   set: (key, value) ->
     assertType key, String
-
-    if 1 > dot = key.lastIndexOf "."
-      return @_set key, value
-
-    if node = @_getParent key
-      return node._set key.slice(dot + 1), value
-
-    throw Error "Invalid key has no parent: '#{key}'"
+    if 0 < dot = key.lastIndexOf "."
+      node = @_getParent key
+      key = key.slice dot + 1
+      return node._set key, value
+    return @_set key, value
 
   delete: (key) ->
     assertType key, String
-
-    if 1 > dot = key.lastIndexOf "."
-      return @_delete key
-
-    if node = @_getParent key
-      return node._delete key.slice(dot + 1)
-
-    throw Error "Invalid key has no parent: '#{key}'"
+    if 0 < dot = key.lastIndexOf "."
+      node = @_getParent key
+      key = key.slice dot + 1
+      return node._delete key
+    return @_delete key
 
   merge: (values) ->
     assertType values, Object
@@ -61,12 +49,14 @@ type.defineMethods
     @_finishAction()
     return
 
+  # TODO: Support refs in `forEach`.
   forEach: (iterator) ->
     nodes = @_nodes
     for key, value of @_values
       iterator nodes[key] or value, key
     return
 
+  # TODO: Support refs in `filter`.
   filter: (iterator) ->
     nodes = @_nodes
     values = {}
@@ -75,6 +65,7 @@ type.defineMethods
       values[key] = value if iterator value, key
     return values
 
+  # TODO: Support refs in `map`.
   map: (iterator) ->
     nodes = @_nodes
     values = {}
@@ -89,8 +80,6 @@ type.defineMethods
 type.defineValues ->
 
   _nodes: Object.create null
-
-  _refs: Object.create null
 
 type.defineGetters
 
@@ -107,43 +96,66 @@ type.definePrototype
 type.defineMethods
 
   _get: (key) ->
-    if ref = @_refs[key]
-    then @_tree._nodes[ref]
-    else @_nodes[key] or @_values[key]
+    @_nodes[key] or @_values[key]
+
+  _follow: (path) ->
+    assertType path, String
+
+    path = path.split "."
+    refs = @_tree._refs
+
+    key = @_key
+    if key is null
+      key = path.shift()
+      key = ref if ref = refs[key]
+
+    while path.length > 1
+      key += "." + path.shift()
+      key = ref if ref = refs[key]
+
+    if node = @_tree._nodes[key]
+      return node._get path[0]
 
   _set: (key, value) ->
 
-    if value is @_values[key]
+    if node = @_nodes[key]
+      delete @_nodes[key]
+      if node._key is @_resolve key
+        @_tree.detach node
+
+    else if value is @_values[key]
       return value
 
-    if has @_refs, key
-      delete @_refs[key]
-
-    else if node = @_nodes[key]
-      @_tree.detach node
-      delete @_nodes[key]
-
     if isType value, Object
-      node = MapNode @_tree
-      @_tree.attach @_resolve(key), node
-
-      @_startAction "set", [key, node._initialValue]
-      @_nodes[key] = node
-      @_values[key] = node._values
-      @_finishAction()
-
-      node.merge value
-      return node
+      node = MapNode()
 
     else if value instanceof Node
       node = value
+      value = null
 
-      if @_tree isnt node._tree
-        throw Error "Cannot attach a node unless in the same tree!"
+      if isDev and node is this
+        throw Error "Cannot attach a node to itself!"
 
-      @_startAction "ref", [key, node._key]
-      @_refs[key] = node._key
+      if node._key
+
+        if node._tree isnt @_tree
+          throw Error "Cannot ref a node from another tree!"
+
+        @_startAction "ref", [key, node._key]
+        @_nodes[key] = node
+        @_values[key] = node._key
+        @_tree.attachRef @_resolve(key), node
+        @_finishAction()
+        return node
+
+    if node
+      @_startAction "set", [key, node._initialValue]
+      @_nodes[key] = node
+      @_values[key] = node._values
+      @_tree.attach @_resolve(key), node
       @_finishAction()
+
+      node.merge value if value
       return node
 
     @_startAction "set", [key, value]
@@ -152,15 +164,13 @@ type.defineMethods
     return value
 
   _delete: (key) ->
-    @_startAction "delete", [key]
 
-    if has @_refs, key
-      delete @_refs[key]
-
-    else if node = @_nodes[key]
-      @_tree.detach node
+    if node = @_nodes[key]
       delete @_nodes[key]
+      if node._key is @_resolve key
+        @_tree.detach node
 
+    @_startAction "delete", [key]
     delete @_values[key]
     @_finishAction()
     return
