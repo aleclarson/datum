@@ -1,48 +1,55 @@
 
-emptyFunction = require "emptyFunction"
-sliceArray = require "sliceArray"
-isType = require "isType"
+isDev = require "isDev"
 Type = require "Type"
 
 type = Type "Action"
 
-type.defineArgs [String, Function]
+type.defineArgs [String, Array.Maybe]
 
-type.defineValues (name, action) ->
+type.defineFrozenValues (name, args) ->
 
-  _name: name
+  name: name
 
-  _action: action
-
-  _resolve: action.resolve
+  args: args or undefined
 
 type.defineMethods
 
-  apply: (node, args) ->
-    assertType node, Node.Kind
+  track: ->
 
-    args = if args.length then sliceArray args else null
-    action = node._startAction @_name, args
-    result = @_action.apply node, args
+    if isDev and @_tracked
+      throw Error "Already tracking this action!"
 
-    if isType result, Promise
-      action.name += ":pending"
-      result = @_async node, args, result
+    @_tracked = yes
+    return
 
-    node._finishAction action
-    return result
+  revert: ->
 
-  _async: (node, args, promise) ->
-    name = @_name + ":resolve"
-    resolve = @_resolve or emptyFunction.thatReturnsArgument
+    if isDev and not @_tracked
+      throw Error "Cannot revert this action!"
 
-    promise.then (result) ->
-      action = node._startAction name, [result]
-      result = resolve.call node, result
-      node._finishAction action
-      return result
+    if isDev and @_reverted
+      throw Error "This action was already reverted!"
 
-    # TODO: Track rejected promises somewhere.
-    # .fail (error) ->
+    result = @_target.__revertAction @name, @args
+    return if result is no
+
+    @_reverted = yes
+    @_target._actions.remove this
+    return
+
+  replay: ->
+    # TODO: Implement this.
+
+#
+# Internal
+#
+
+type.defineValues
+
+  _target: null
+
+  _tracked: no
+
+  _reverted: no
 
 module.exports = type.build()

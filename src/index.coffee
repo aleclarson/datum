@@ -1,8 +1,10 @@
 
-Entity = require "./Entity"
-Entity.Type = require "./EntityBuilder"
+Converter = require "./Converter"
+Converter.add Object, MapNode = require "./MapNode"
+Converter.add Array, ArrayNode = require "./ArrayNode"
 
-exports.Entity = Entity
-exports.MapNode = require "./MapNode"
-exports.NodeList = require "./NodeList"
-exports.Node = require "./Node"
+module.exports =
+  Node: require "./Node"
+  MapNode: MapNode
+  ArrayNode: ArrayNode
+  Entity: require "./Entity"

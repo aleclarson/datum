@@ -1,200 +1,116 @@
 
+emptyFunction = require "emptyFunction"
 assertType = require "assertType"
 hasKeys = require "hasKeys"
-isType = require "isType"
 isDev = require "isDev"
 Type = require "Type"
 
+Converter = require "./Converter"
 Node = require "./Node"
+
+{convertValue, convertState} = Converter
 
 type = Type "MapNode"
 
 type.inherits Node
 
-type.createInstance ->
-  return Node {}
+type.defineArgs [Object.Maybe]
 
 type.defineMethods
 
   has: (key) ->
-    @_values.hasOwnProperty key
+    assertType key, String
+    return @_state.hasOwnProperty key
 
   get: (key) ->
     assertType key, String
-    if 0 < key.indexOf "."
-      return @_follow key
-    return @_get key
+    return @_state[key]
 
   set: (key, value) ->
     assertType key, String
-    if 0 < dot = key.lastIndexOf "."
-      node = @_getParent key
-      key = key.slice dot + 1
-      return node._set key, value
-    return @_set key, value
 
-  delete: (key) ->
-    assertType key, String
-    if 0 < dot = key.lastIndexOf "."
-      node = @_getParent key
-      key = key.slice dot + 1
-      return node._delete key
-    return @_delete key
+    @_state[key] = value
+    @_events.emit "set", key, value
+    return value
+
+  add: (node) ->
+    assertType node, Node.Kind
+
+    if isDev and node.id is undefined
+      throw Error "Nodes passed to `add` must have an 'id' property!"
+
+    unless has @_state, node.id
+      @_state[node.id] = node
+      @_events.emit "set", node.id, node
+    return
 
   merge: (values) ->
     assertType values, Object
     return unless hasKeys values
-    @_startAction "merge", [values]
-    @_set key, value for key, value of values
-    @_finishAction()
+    for key, value of values
+      @set key, value
     return
 
-  # TODO: Support refs in `forEach`.
+  delete: (key) ->
+    assertType key, String
+    if has @_state, key
+      delete @_state[key]
+      @_events.emit "delete", key
+    return
+
+  reset: (values) ->
+    assertType values, Object
+    @_state = values or {}
+    @_events.emit "reset"
+    return
+
+  observe: (key, callback) ->
+    @_events.on "set", ->
+      if key is arguments[0]
+        callback arguments[1]
+        return
+
   forEach: (iterator) ->
-    nodes = @_nodes
-    for key, value of @_values
-      iterator nodes[key] or value, key
+    assertType iterator, Function
+    for key, value of @_state
+      iterator value, key
     return
 
-  # TODO: Support refs in `filter`.
   filter: (iterator) ->
-    nodes = @_nodes
+    assertType iterator, Function
     values = {}
-    for key, value of @_values
-      value = node if node = nodes[key]
-      values[key] = value if iterator value, key
+
+    for key, value of @_state
+      if iterator value, key
+        values[key] = value
+
     return values
 
-  # TODO: Support refs in `map`.
   map: (iterator) ->
-    nodes = @_nodes
+    assertType iterator, Function
     values = {}
-    for key, value of @_values
-      values[key] = iterator nodes[key] or value
+
+    for key, value of @_state
+      values[key] = iterator value, key
+
     return values
 
 #
 # Internal
 #
 
-type.defineValues ->
+type.defineValues (values) ->
 
-  _nodes: Object.create null
+  convertState values if values
 
-type.defineGetters
-
-  _initialValue: -> {}
-
-type.definePrototype
-
-  _revertable: Object.create
-    constructor: null
-    ref: 1
-    set: 1
-    delete: 1
+  _state: values or {}
 
 type.defineMethods
 
-  _get: (key) ->
-    @_nodes[key] or @_values[key]
-
-  _follow: (path) ->
-    assertType path, String
-
-    path = path.split "."
-    refs = @_tree._refs
-
-    key = @_key
-    if key is null
-      key = path.shift()
-      key = ref if ref = refs[key]
-
-    while path.length > 1
-      key += "." + path.shift()
-      key = ref if ref = refs[key]
-
-    if node = @_tree._nodes[key]
-      return node._get path[0]
-
-  _set: (key, value) ->
-
-    if node = @_nodes[key]
-      delete @_nodes[key]
-      if node._key is @_resolve key
-        @_tree.detach node
-
-    else if value is @_values[key]
-      return value
-
-    if isType value, Object
-      node = MapNode()
-
-    else if value instanceof Node
-      node = value
-      value = null
-
-      if isDev and node is this
-        throw Error "Cannot attach a node to itself!"
-
-      if node._key
-
-        if node._tree isnt @_tree
-          throw Error "Cannot ref a node from another tree!"
-
-        @_startAction "ref", [key, node._key]
-        @_nodes[key] = node
-        @_values[key] = node._key
-        @_tree.attachRef @_resolve(key), node
-        @_finishAction()
-        return node
-
-    if node
-      @_startAction "set", [key, node._initialValue]
-      @_nodes[key] = node
-      @_values[key] = node._values
-      @_tree.attach @_resolve(key), node
-      @_finishAction()
-
-      node.merge value if value
-      return node
-
-    @_startAction "set", [key, value]
-    @_values[key] = value
-    @_finishAction()
-    return value
-
-  _delete: (key) ->
-
-    if node = @_nodes[key]
-      delete @_nodes[key]
-      if node._key is @_resolve key
-        @_tree.detach node
-
-    @_startAction "delete", [key]
-    delete @_values[key]
-    @_finishAction()
-    return
+  _getState: -> @_state
 
 type.overrideMethods
 
-  __initialize: (values) ->
-    if isType values, Object
-      @merge values
-      return
+  __createOptions: emptyFunction.thatReturnsArgument
 
-  __revertAction: (name, args) ->
-
-    if name is "set"
-      throw Error "not implemented"
-      return
-
-    if name is "delete"
-      throw Error "not implemented"
-      return
-
-  __onDetach: ->
-    for key, node of @_nodes
-      @_tree.detach node
-    return
-
-module.exports = MapNode = type.build()
+module.exports = type.build()
